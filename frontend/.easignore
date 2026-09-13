@@ -1,0 +1,69 @@
+# === Android build artifacts (must never be uploaded to EAS) ===
+# These contain Windows-absolute paths baked in by local Gradle builds.
+# EAS re-generates them in its Linux container with correct paths.
+android/local.properties
+android/.gradle/**
+android/.gradle/
+android/build/**
+android/build/
+android/app/build/**
+android/app/build/
+android/app/.cxx/**
+android/app/.cxx/
+android/.cxx/**
+android/.cxx/
+android/.kotlin/**
+android/.kotlin/
+
+# === Node modules (too large, EAS installs them fresh) ===
+node_modules/**
+node_modules/
+
+# === Git metadata ===
+.git/**
+.git/
+
+# === APK / AAB output files ===
+*.apk
+*.aab
+
+# === Expo local cache (from .gitignore) ===
+.expo/**
+.expo/
+dist/**
+dist/
+web-build/**
+web-build/
+expo-env.d.ts
+
+# === Metro bundler ===
+.metro-health-check*
+
+# === Debug / error logs ===
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# === Environment secrets ===
+.env*.local
+
+# === TypeScript build info ===
+*.tsbuildinfo
+
+# === Signing credentials ===
+credentials.json
+credentials/**
+credentials/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# === macOS artifacts ===
+.DS_Store
+
+# === Example app ===
+app-example/**
+app-example/

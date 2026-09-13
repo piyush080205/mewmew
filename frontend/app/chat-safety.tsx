@@ -16,6 +16,8 @@ import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 
 import { API_URL } from '../services/api';
+import { fonts, ThemeColors } from '../constants/theme';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface RedFlag {
   type: string;
@@ -41,6 +43,8 @@ interface ChatAnalysis {
 }
 
 export default function ChatSafetyScreen() {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -121,22 +125,22 @@ export default function ChatSafetyScreen() {
 
   const getRiskColor = (level: string) => {
     switch (level) {
-      case 'safe': return '#2ed573';
-      case 'low_risk': return '#7bed9f';
-      case 'moderate_risk': return '#f39c12';
-      case 'high_risk': return '#e74c3c';
-      case 'dangerous': return '#ff4757';
-      default: return '#888';
+      case 'safe': return colors.success;
+      case 'low_risk': return colors.success;
+      case 'moderate_risk': return colors.amber;
+      case 'high_risk': return colors.danger;
+      case 'dangerous': return colors.danger;
+      default: return colors.textSecondary;
     }
   };
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case 'low': return '#7bed9f';
-      case 'medium': return '#f39c12';
-      case 'high': return '#e74c3c';
-      case 'critical': return '#ff4757';
-      default: return '#888';
+      case 'low': return colors.success;
+      case 'medium': return colors.amber;
+      case 'high': return colors.danger;
+      case 'critical': return colors.danger;
+      default: return colors.textSecondary;
     }
   };
 
@@ -161,7 +165,7 @@ export default function ChatSafetyScreen() {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <View>
             <Text style={styles.title}>Chat Safety</Text>
@@ -171,7 +175,7 @@ export default function ChatSafetyScreen() {
 
         {/* Info Card */}
         <View style={styles.infoCard}>
-          <Ionicons name="information-circle" size={24} color="#3498db" />
+          <Ionicons name="information-circle" size={24} color={colors.primary} />
           <Text style={styles.infoText}>
             Upload a screenshot of any suspicious chat conversation. Our AI will analyze it for potential red flags like manipulation, grooming, or social engineering tactics.
           </Text>
@@ -187,17 +191,17 @@ export default function ChatSafetyScreen() {
                 setImageBase64(null);
                 setAnalysis(null);
               }}>
-                <Ionicons name="close-circle" size={28} color="#ff4757" />
+                <Ionicons name="close-circle" size={28} color={colors.danger} />
               </TouchableOpacity>
             </View>
           ) : (
             <View style={styles.uploadOptions}>
               <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
-                <Ionicons name="images" size={32} color="#3498db" />
+                <Ionicons name="images" size={32} color={colors.primary} />
                 <Text style={styles.uploadText}>Select from Gallery</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.uploadButton} onPress={takePhoto}>
-                <Ionicons name="camera" size={32} color="#3498db" />
+                <Ionicons name="camera" size={32} color={colors.primary} />
                 <Text style={styles.uploadText}>Take Photo</Text>
               </TouchableOpacity>
             </View>
@@ -253,7 +257,7 @@ export default function ChatSafetyScreen() {
             {analysis.red_flags.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>
-                  <Ionicons name="warning" size={16} color="#ff4757" /> Red Flags Detected ({analysis.red_flags.length})
+                  <Ionicons name="warning" size={16} color={colors.danger} /> Red Flags Detected ({analysis.red_flags.length})
                 </Text>
                 {analysis.red_flags.map((flag, idx) => (
                   <View key={idx} style={styles.flagCard}>
@@ -287,7 +291,7 @@ export default function ChatSafetyScreen() {
             {/* No Red Flags - Safe */}
             {analysis.red_flags.length === 0 && (
               <View style={styles.safeCard}>
-                <Ionicons name="checkmark-circle" size={48} color="#2ed573" />
+                <Ionicons name="checkmark-circle" size={48} color={colors.success} />
                 <Text style={styles.safeTitle}>No Red Flags Detected</Text>
                 <Text style={styles.safeText}>
                   This conversation appears to be normal. However, always trust your instincts if something feels wrong.
@@ -322,7 +326,7 @@ export default function ChatSafetyScreen() {
                       <Ionicons 
                         name={resource.type === 'helpline' ? 'call' : 'globe'} 
                         size={24} 
-                        color="#3498db" 
+                        color={colors.primary}
                       />
                       <Text style={styles.resourceName}>{resource.name}</Text>
                       {resource.contact && (
@@ -344,19 +348,19 @@ export default function ChatSafetyScreen() {
           <Text style={styles.sectionTitle}>Safety Tips</Text>
           <View style={styles.tipsCard}>
             <View style={styles.tipItem}>
-              <Ionicons name="shield" size={20} color="#3498db" />
+              <Ionicons name="shield" size={20} color={colors.primary} />
               <Text style={styles.tipText}>Never share personal info with strangers online</Text>
             </View>
             <View style={styles.tipItem}>
-              <Ionicons name="eye-off" size={20} color="#3498db" />
+              <Ionicons name="eye-off" size={20} color={colors.primary} />
               <Text style={styles.tipText}>Be cautious of people who ask for photos or videos</Text>
             </View>
             <View style={styles.tipItem}>
-              <Ionicons name="people" size={20} color="#3498db" />
+              <Ionicons name="people" size={20} color={colors.primary} />
               <Text style={styles.tipText}>Talk to a trusted adult if something feels wrong</Text>
             </View>
             <View style={styles.tipItem}>
-              <Ionicons name="document-text" size={20} color="#3498db" />
+              <Ionicons name="document-text" size={20} color={colors.primary} />
               <Text style={styles.tipText}>Save evidence of suspicious conversations</Text>
             </View>
           </View>
@@ -366,10 +370,10 @@ export default function ChatSafetyScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f0f',
+    backgroundColor: colors.background,
   },
   scrollContent: {
     padding: 20,
@@ -386,16 +390,17 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontFamily: fonts.extraBold,
+    color: colors.textPrimary,
   },
   subtitle: {
     fontSize: 14,
-    color: '#888',
+    fontFamily: fonts.regular,
+    color: colors.textSecondary,
   },
   infoCard: {
     flexDirection: 'row',
-    backgroundColor: '#1a2a3a',
+    backgroundColor: colors.primaryTint,
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
@@ -403,7 +408,8 @@ const styles = StyleSheet.create({
   },
   infoText: {
     flex: 1,
-    color: '#3498db',
+    color: colors.textPrimary,
+    fontFamily: fonts.regular,
     fontSize: 14,
     lineHeight: 20,
   },
@@ -416,24 +422,27 @@ const styles = StyleSheet.create({
   },
   uploadButton: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#333',
+    borderColor: colors.borderStrong,
     borderStyle: 'dashed',
   },
   uploadText: {
-    color: '#888',
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
     fontSize: 14,
     marginTop: 8,
   },
   previewContainer: {
     position: 'relative',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     overflow: 'hidden',
+    borderColor: colors.border,
+    borderWidth: 1,
   },
   preview: {
     width: '100%',
@@ -443,14 +452,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.surface,
     borderRadius: 14,
   },
   analyzeButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#e74c3c',
+    backgroundColor: colors.danger,
     borderRadius: 12,
     padding: 16,
     gap: 8,
@@ -458,11 +467,11 @@ const styles = StyleSheet.create({
   },
   analyzeButtonText: {
     color: '#fff',
+    fontFamily: fonts.semiBold,
     fontSize: 16,
-    fontWeight: '600',
   },
   riskCard: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
     marginBottom: 20,
@@ -476,7 +485,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   riskTitle: {
-    color: '#888',
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
     fontSize: 14,
   },
   riskBadge: {
@@ -486,8 +496,8 @@ const styles = StyleSheet.create({
   },
   riskBadgeText: {
     color: '#fff',
+    fontFamily: fonts.semiBold,
     fontSize: 12,
-    fontWeight: '600',
   },
   scoreCircle: {
     alignItems: 'center',
@@ -495,14 +505,16 @@ const styles = StyleSheet.create({
   },
   scoreValue: {
     fontSize: 56,
-    fontWeight: 'bold',
+    fontFamily: fonts.extraBold,
   },
   scoreLabel: {
-    color: '#888',
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
     fontSize: 14,
   },
   advisory: {
-    color: '#fff',
+    color: colors.textPrimary,
+    fontFamily: fonts.regular,
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 22,
@@ -511,16 +523,18 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   sectionTitle: {
-    color: '#888',
+    color: colors.textSecondary,
+    fontFamily: fonts.semiBold,
     fontSize: 14,
-    fontWeight: '600',
     marginBottom: 12,
   },
   flagCard: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
+    borderColor: colors.border,
+    borderWidth: 1,
   },
   flagHeader: {
     flexDirection: 'row',
@@ -542,9 +556,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   flagType: {
-    color: '#fff',
+    color: colors.textPrimary,
+    fontFamily: fonts.semiBold,
     fontSize: 14,
-    fontWeight: '600',
   },
   severityBadge: {
     paddingHorizontal: 8,
@@ -553,54 +567,62 @@ const styles = StyleSheet.create({
   },
   severityText: {
     color: '#fff',
+    fontFamily: fonts.semiBold,
     fontSize: 10,
-    fontWeight: '600',
   },
   evidenceBox: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: colors.backgroundAlt,
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,
   },
   evidenceLabel: {
-    color: '#888',
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
     fontSize: 11,
     marginBottom: 4,
   },
   evidenceText: {
-    color: '#f39c12',
+    color: colors.amber,
+    fontFamily: fonts.regular,
     fontSize: 13,
     fontStyle: 'italic',
   },
   flagExplanation: {
-    color: '#888',
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
     fontSize: 13,
     lineHeight: 20,
   },
   safeCard: {
-    backgroundColor: '#1a3a1a',
+    backgroundColor: colors.successTint,
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
     marginBottom: 20,
+    borderColor: colors.successBorder,
+    borderWidth: 1,
   },
   safeTitle: {
-    color: '#2ed573',
+    color: colors.success,
+    fontFamily: fonts.semiBold,
     fontSize: 18,
-    fontWeight: '600',
     marginTop: 12,
     marginBottom: 8,
   },
   safeText: {
-    color: '#7bed9f',
+    color: colors.success,
+    fontFamily: fonts.regular,
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
   },
   actionsCard: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
+    borderColor: colors.border,
+    borderWidth: 1,
   },
   actionItem: {
     flexDirection: 'row',
@@ -612,18 +634,19 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#3498db',
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionNumberText: {
     color: '#fff',
+    fontFamily: fonts.semiBold,
     fontSize: 14,
-    fontWeight: '600',
   },
   actionText: {
     flex: 1,
-    color: '#fff',
+    color: colors.textPrimary,
+    fontFamily: fonts.regular,
     fontSize: 14,
     lineHeight: 20,
   },
@@ -633,34 +656,39 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   resourceCard: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     width: '47%',
     alignItems: 'center',
+    borderColor: colors.border,
+    borderWidth: 1,
   },
   resourceName: {
-    color: '#fff',
+    color: colors.textPrimary,
+    fontFamily: fonts.semiBold,
     fontSize: 12,
-    fontWeight: '600',
     marginTop: 8,
     textAlign: 'center',
   },
   resourceContact: {
-    color: '#3498db',
+    color: colors.primary,
+    fontFamily: fonts.bold,
     fontSize: 14,
-    fontWeight: 'bold',
     marginTop: 4,
   },
   resourceUrl: {
-    color: '#888',
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
     fontSize: 10,
     marginTop: 4,
   },
   tipsCard: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
+    borderColor: colors.border,
+    borderWidth: 1,
   },
   tipItem: {
     flexDirection: 'row',
@@ -670,7 +698,8 @@ const styles = StyleSheet.create({
   },
   tipText: {
     flex: 1,
-    color: '#fff',
+    color: colors.textPrimary,
+    fontFamily: fonts.regular,
     fontSize: 14,
   },
 });

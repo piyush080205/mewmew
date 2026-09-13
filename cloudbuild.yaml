@@ -1,0 +1,29 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/nirbhay-backend'
+      - './backend'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/nirbhay-backend'
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'nirbhay-backend'
+      - '--image=gcr.io/$PROJECT_ID/nirbhay-backend'
+      - '--platform=managed'
+      - '--region=asia-south1'
+      - '--allow-unauthenticated'
+      - '--memory=512Mi'
+      - '--port=8080'
+      - '--set-secrets=SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_SECRET_KEY=SUPABASE_SECRET_KEY:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,FAST2SMS_API_KEY=FAST2SMS_API_KEY:latest,UNWIRED_LABS_API_KEY=UNWIRED_LABS_API_KEY:latest'
+
+images:
+  - 'gcr.io/$PROJECT_ID/nirbhay-backend'

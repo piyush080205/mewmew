@@ -2,6 +2,8 @@ import React from 'react';
 import { View, StyleSheet, Text, Dimensions, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { LocationPoint } from '../store/tripStore';
+import { ThemeColors } from '../constants/theme';
+import { useTheme } from '../contexts/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -14,6 +16,9 @@ interface MapViewProps {
  * Shows user path as polyline with source indicators (GPS vs Cellular)
  */
 export default function MapView({ locations }: MapViewProps) {
+  const { colors, theme } = useTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   if (locations.length === 0) {
     return (
       <View style={styles.emptyContainer}>
@@ -43,14 +48,16 @@ export default function MapView({ locations }: MapViewProps) {
       <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
       <style>
         body { margin: 0; padding: 0; }
-        #map { width: 100%; height: 100vh; }
+        #map { width: 100%; height: 100vh; background: ${theme === 'dark' ? '#161620' : '#fff'}; }
+        .leaflet-tile-pane { filter: ${theme === 'dark' ? 'invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9)' : 'none'}; }
         .legend {
-          background: rgba(0,0,0,0.8);
+          background: ${theme === 'dark' ? 'rgba(28,28,40,0.92)' : 'rgba(255,255,255,0.92)'};
           padding: 8px 12px;
           border-radius: 8px;
           font-size: 11px;
-          color: white;
+          color: ${theme === 'dark' ? '#B7B9D0' : '#54566B'};
           font-family: -apple-system, sans-serif;
+          border: 1px solid ${colors.border};
         }
         .legend-item {
           display: flex;
@@ -63,9 +70,9 @@ export default function MapView({ locations }: MapViewProps) {
           border-radius: 50%;
           margin-right: 8px;
         }
-        .gps-dot { background: #3498db; }
-        .cell-dot { background: #f39c12; }
-        .current-dot { background: #ff4757; }
+        .gps-dot { background: ${colors.primary}; }
+        .cell-dot { background: ${colors.amber}; }
+        .current-dot { background: ${colors.danger}; }
       </style>
     </head>
     <body>
@@ -86,7 +93,7 @@ export default function MapView({ locations }: MapViewProps) {
         var pathCoords = ${JSON.stringify(pathCoords)};
         if (pathCoords.length > 1) {
           L.polyline(pathCoords, {
-            color: '#3498db',
+            color: '${colors.primary}',
             weight: 3,
             opacity: 0.7
           }).addTo(map);
@@ -105,25 +112,25 @@ export default function MapView({ locations }: MapViewProps) {
         cellularPoints.forEach(function(point) {
           // Accuracy radius circle
           L.circle([point.lat, point.lng], {
-            color: '#f39c12',
-            fillColor: '#f39c12',
+            color: '${colors.amber}',
+            fillColor: '${colors.amber}',
             fillOpacity: 0.2,
             radius: point.radius
           }).addTo(map);
-          
+
           L.circleMarker([point.lat, point.lng], {
             radius: 6,
-            fillColor: '#f39c12',
+            fillColor: '${colors.amber}',
             color: '#fff',
             weight: 2,
             fillOpacity: 1
           }).addTo(map);
         });
-        
+
         // Current location marker (red)
         L.circleMarker([${lastLocation.latitude}, ${lastLocation.longitude}], {
           radius: 10,
-          fillColor: '#ff4757',
+          fillColor: '${colors.danger}',
           color: '#fff',
           weight: 3,
           fillOpacity: 1
@@ -167,12 +174,14 @@ export default function MapView({ locations }: MapViewProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
   },
   webview: {
     flex: 1,
@@ -182,10 +191,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.surface,
   },
   emptyText: {
-    color: '#666',
+    color: colors.textMuted,
     fontSize: 14,
   },
 });

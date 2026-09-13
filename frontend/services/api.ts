@@ -96,3 +96,75 @@ export async function sendMotionVariance(
     console.error('[API] Failed to send motion variance:', err);
   }
 }
+
+// ============================================================
+// Emergency contacts / offline SOS sync
+//
+// The primary sync path for a queued SOS event is native
+// (InternetTransport calling the backend directly so it works without JS
+// alive) — these are a secondary surface: contact CRUD, and a manual
+// "retry sync" the app could offer.
+// ============================================================
+
+export interface EmergencyContact {
+  id: string;
+  name?: string;
+  phone_number: string;
+  priority: number;
+  is_primary: boolean;
+}
+
+export async function getEmergencyContacts(userId: string = 'default_user'): Promise<EmergencyContact[]> {
+  try {
+    const res = await fetch(`${API_URL}/api/emergency-contacts?user_id=${encodeURIComponent(userId)}`);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (err) {
+    console.error('[API] Failed to fetch emergency contacts:', err);
+    return [];
+  }
+}
+
+export async function addEmergencyContact(contact: {
+  user_id?: string;
+  name?: string;
+  phone_number: string;
+  priority?: number;
+  is_primary?: boolean;
+}): Promise<EmergencyContact | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/emergency-contacts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: 'default_user', ...contact }),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.error('[API] Failed to add emergency contact:', err);
+    return null;
+  }
+}
+
+export async function deleteEmergencyContact(id: string): Promise<void> {
+  try {
+    await fetch(`${API_URL}/api/emergency-contacts/${id}`, { method: 'DELETE' });
+  } catch (err) {
+    console.error('[API] Failed to delete emergency contact:', err);
+  }
+}
+
+/** Manual/secondary retry surface for a queued SOS event — see module comment above. */
+export async function syncSosEvent(event: Record<string, unknown>): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_URL}/api/sos/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ events: [event] }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('[API] Failed to sync SOS event:', err);
+    return false;
+  }
+}

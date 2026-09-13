@@ -1,0 +1,36 @@
+{
+  "ServiceName": "nirbhay-backend",
+  "SourceConfiguration": {
+    "AuthenticationConfiguration": {
+      "AccessRoleArn": "arn:aws:iam::164686058698:role/nirbhay-apprunner-ecr-access"
+    },
+    "AutoDeploymentsEnabled": false,
+    "ImageRepository": {
+      "ImageIdentifier": "164686058698.dkr.ecr.ap-south-1.amazonaws.com/nirbhay-backend:latest",
+      "ImageRepositoryType": "ECR",
+      "ImageConfiguration": {
+        "Port": "8080",
+        "RuntimeEnvironmentSecrets": {
+          "SUPABASE_URL": "arn:aws:secretsmanager:ap-south-1:164686058698:secret:SUPABASE_URL-6ZUJiU",
+          "SUPABASE_SECRET_KEY": "arn:aws:secretsmanager:ap-south-1:164686058698:secret:SUPABASE_SECRET_KEY-ciizxv",
+          "GEMINI_API_KEY": "arn:aws:secretsmanager:ap-south-1:164686058698:secret:GEMINI_API_KEY-TUudvr",
+          "FAST2SMS_API_KEY": "arn:aws:secretsmanager:ap-south-1:164686058698:secret:FAST2SMS_API_KEY-PL1M7N",
+          "UNWIRED_LABS_API_KEY": "arn:aws:secretsmanager:ap-south-1:164686058698:secret:UNWIRED_LABS_API_KEY-DysAxR"
+        }
+      }
+    }
+  },
+  "InstanceConfiguration": {
+    "Cpu": "0.25 vCPU",
+    "Memory": "0.5 GB",
+    "InstanceRoleArn": "arn:aws:iam::164686058698:role/nirbhay-apprunner-instance-role"
+  },
+  "HealthCheckConfiguration": {
+    "Protocol": "HTTP",
+    "Path": "/api/health",
+    "Interval": 10,
+    "Timeout": 5,
+    "HealthyThreshold": 1,
+    "UnhealthyThreshold": 5
+  }
+}

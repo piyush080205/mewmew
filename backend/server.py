@@ -1,9 +1,10 @@
-from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Body
+from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Body, Header
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from supabase_client import supabase
+from supabase_client import get_supabase
 import os
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal, Dict, Any
@@ -17,8 +18,26 @@ import asyncio
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+
+http_client: Optional[httpx.AsyncClient] = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # One pooled httpx client for the whole process, instead of opening a
+    # fresh TCP/TLS connection on every outbound request. The Supabase
+    # client is its own lazily-created singleton (see supabase_client.py).
+    global http_client
+    http_client = httpx.AsyncClient(
+        limits=httpx.Limits(max_connections=50, max_keepalive_connections=20)
+    )
+    await get_supabase()
+    yield
+    await http_client.aclose()
+
+
 # Create the main app (single instance)
-app = FastAPI(title="Nirbhay Safety API")
+app = FastAPI(title="Nirbhay Safety API", lifespan=lifespan)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -121,6 +140,55 @@ class GuardianUpdate(BaseModel):
     guardian_phone_2: Optional[str] = None
     guardian_phone_3: Optional[str] = None
     guardian_fcm_token: Optional[str] = None
+
+# ===========================================
+# Emergency Contacts / SOS Event Models
+# ===========================================
+
+class EmergencyContactIn(BaseModel):
+    """Contact create/update payload"""
+    user_id: str = "default_user"
+    name: Optional[str] = None
+    phone_number: str
+    priority: int = 1
+    is_primary: bool = False
+
+class EmergencyContactOut(EmergencyContactIn):
+    id: str
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+class SosEventSync(BaseModel):
+    """A single offline-queued SOS event reported by the native client."""
+    client_event_id: str  # Room-generated UUID; used for idempotent upsert
+    user_id: str = "default_user"
+    trip_id: Optional[str] = None
+    created_at: datetime
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy_meters: Optional[float] = None
+    location_is_fresh: bool = True
+    location_timestamp: Optional[datetime] = None
+    battery_percent: Optional[int] = None
+    confidence: float
+    trigger_reason: str
+    contributing_signals: List[str] = []
+    status: str = "PENDING"
+    sms_recipients: List[str] = []
+    sms_result: Optional[dict] = None
+    cancelled: bool = False
+
+class SosEventSyncRequest(BaseModel):
+    """Body for POST /api/sos/sync — one or many queued events."""
+    events: List[SosEventSync]
+
+class SosEventOut(SosEventSync):
+    id: str
+    synced_at: Optional[datetime] = None
+
+class SosEventStatusUpdate(BaseModel):
+    status: Optional[str] = None
+    cancelled: Optional[bool] = None
 
 # ===========================================
 # Geocoding Models
@@ -280,30 +348,80 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     
     return R * c
 
-async def evaluate_risk_rules(trip: dict) -> Optional[RiskEvent]:
+async def _fetch_recent_locations(sb, trip_id: str, since: datetime, limit: int = 200) -> List[dict]:
+    """Locations for `trip_id` created at/after `since`, oldest first."""
+    result = await (
+        sb.table("location_events")
+        .select("latitude,longitude,source,accuracy,accuracy_radius,created_at")
+        .eq("user_id", trip_id)
+        .gte("created_at", since.astimezone(timezone.utc).isoformat())
+        .order("created_at")
+        .limit(limit)
+        .execute()
+    )
+    return [{**row, "timestamp": row["created_at"]} for row in result.data]
+
+async def _fetch_last_locations(sb, trip_id: str, limit: int = 5) -> List[dict]:
+    """Most recent `limit` locations for `trip_id`, oldest first."""
+    result = await (
+        sb.table("location_events")
+        .select("latitude,longitude,source,accuracy,accuracy_radius,created_at")
+        .eq("user_id", trip_id)
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return [{**row, "timestamp": row["created_at"]} for row in reversed(result.data)]
+
+async def _fetch_recent_motion(sb, trip_id: str, since: datetime, limit: int = 200) -> List[dict]:
+    """Motion events for `trip_id` created at/after `since`, oldest first."""
+    result = await (
+        sb.table("sensor_events")
+        .select("sensor_data,created_at")
+        .eq("user_id", trip_id)
+        .gte("created_at", since.astimezone(timezone.utc).isoformat())
+        .order("created_at")
+        .limit(limit)
+        .execute()
+    )
+    events = []
+    for row in result.data:
+        sensor_data = row.get("sensor_data") or {}
+        events.append({
+            "is_panic": sensor_data.get("is_panic", False),
+            "timestamp": row["created_at"],
+        })
+    return events
+
+async def evaluate_risk_rules(trip_id: str) -> Optional[RiskEvent]:
     """
-    Evaluate all risk rules against current trip data.
+    Evaluate all risk rules against a trip's recent location/motion history.
     Returns a RiskEvent if risk is detected, None otherwise.
-    
-    This is the core risk detection engine - rule-based, no ML.
+
+    This is the core risk detection engine - rule-based, no ML. It queries
+    location_events/sensor_events directly with a time window instead of
+    scanning an ever-growing JSON blob on the trips row, so evaluation cost
+    stays roughly constant as a trip goes on rather than growing with it.
     """
-    locations = trip.get('locations', [])
-    motion_events = trip.get('motion_events', [])
-    
+    sb = await get_supabase()
+
     # Risk can be detected even without location data if we have motion
     contributing_signals = []
     detected_rule = None
     confidence = 0.0
-    
+
     # Get recent data (last 1 minute for faster response)
     now = now_ist()  # Use IST for accurate night-time detection in India
     one_min_ago = now - timedelta(seconds=60)
     thirty_sec_ago = now - timedelta(seconds=30)
-    
-    recent_locations = [l for l in locations if datetime.fromisoformat(l['timestamp'].replace('Z', '')) > one_min_ago] if locations else []
-    recent_motion = [m for m in motion_events if datetime.fromisoformat(m['timestamp'].replace('Z', '')) > one_min_ago] if motion_events else []
-    very_recent_motion = [m for m in motion_events if datetime.fromisoformat(m['timestamp'].replace('Z', '')) > thirty_sec_ago] if motion_events else []
-    
+
+    recent_locations, recent_motion, very_recent_motion, last_5_locs = await asyncio.gather(
+        _fetch_recent_locations(sb, trip_id, one_min_ago),
+        _fetch_recent_motion(sb, trip_id, one_min_ago),
+        _fetch_recent_motion(sb, trip_id, thirty_sec_ago),
+        _fetch_last_locations(sb, trip_id, limit=5),
+    )
+
     # Check for panic movements in recent data
     recent_panic = [m for m in recent_motion if m.get('is_panic', False)]
     very_recent_panic = [m for m in very_recent_motion if m.get('is_panic', False)]
@@ -351,8 +469,7 @@ async def evaluate_risk_rules(trip: dict) -> Optional[RiskEvent]:
                 confidence = RISK_RULES[detected_rule]["base_confidence"]
     
     # Rule 4: Prolonged stop in unusual location (> 5 min stop after significant movement)
-    if not detected_rule and len(locations) >= 5:
-        last_5_locs = locations[-5:]
+    if not detected_rule and len(last_5_locs) >= 5:
         # Check if first 3 showed movement, last 2 are stationary
         movements = []
         for i in range(1, len(last_5_locs)):
@@ -379,7 +496,7 @@ async def evaluate_risk_rules(trip: dict) -> Optional[RiskEvent]:
         confidence = min(confidence + 0.1, 0.95)
     
     if detected_rule:
-        last_loc = recent_locations[-1] if recent_locations else (locations[-1] if locations else None)
+        last_loc = recent_locations[-1] if recent_locations else (last_5_locs[-1] if last_5_locs else None)
         return RiskEvent(
             rule_name=detected_rule,
             contributing_signals=contributing_signals,
@@ -432,9 +549,8 @@ async def send_sms_alert(phone: str, message: str, location: Optional[dict] = No
             "Cache-Control": "no-cache",
         }
         
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, data=payload, headers=headers, timeout=10.0)
-        
+        response = await http_client.post(url, data=payload, headers=headers, timeout=10.0)
+
         result = response.json()
         
         if result.get("return") == True or result.get("status_code") == 200:
@@ -468,7 +584,12 @@ async def trigger_alerts(trip: dict, risk_event: RiskEvent) -> dict:
     guardian_fcm_token = trip.get('guardian_fcm_token')
     
     message = f"⚠️ NIRBHAY ALERT: Potential risk detected. Rule: {risk_event.rule_name}. User may need help."
-    
+    # Plain-ASCII, length-bounded copy for SMS: any non-GSM-7 character (e.g. the
+    # emoji above) forces UCS-2 encoding, which caps a single segment at ~70 chars
+    # instead of ~160 and causes carriers/Fast2SMS to silently split the message
+    # into multiple billed segments for one recipient.
+    sms_message = f"NIRBHAY SOS: {risk_event.rule_name}. Please check on me now."
+
     # Try push notification first (primary)
     if guardian_fcm_token:
         results["push_sent"] = await send_push_notification(
@@ -476,12 +597,12 @@ async def trigger_alerts(trip: dict, risk_event: RiskEvent) -> dict:
             "🚨 Safety Alert",
             message
         )
-    
+
     # SMS is mandatory fallback (always try)
     if guardian_phone:
         results["sms_sent"] = await send_sms_alert(
             guardian_phone,
-            message,
+            sms_message,
             risk_event.last_known_location
         )
     
@@ -493,36 +614,6 @@ async def trigger_alerts(trip: dict, risk_event: RiskEvent) -> dict:
 # ===========================================
 # API Endpoints (all on api_router)
 # ===========================================
-
-@api_router.post("/validate-invite")
-def validate_invite(data: dict = Body(...)):
-    code = data.get("code")
-
-    print("Received invite code:", code)
-
-    if not code:
-        raise HTTPException(status_code=400, detail="Code is required")
-
-    result = supabase.table("invites").select("*").eq("invite_code", code).execute()
-
-    print("DB result:", result.data)
-
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Invalid invite")
-
-    invite = result.data[0]
-
-    # TEMP: disable strict blocking for beta testing
-    # if invite["used"]:
-    #     raise HTTPException(status_code=403, detail="Invite already used")
-
-    # Mark as used
-    supabase.table("invites").update({"used": True}).eq("invite_code", code).execute()
-
-    return {"status": "approved"}
-
-
-
 
 @api_router.get("/")
 async def root():
@@ -540,15 +631,31 @@ async def health_check():
         }
     }
 
+async def resolve_user_id(authorization: Optional[str] = Header(None), fallback: str = "default_user") -> str:
+    """
+    Resolve the real Supabase-authenticated user id from a Bearer token if present,
+    otherwise fall back to the guest id so unauthenticated trips keep working.
+    """
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            sb = await get_supabase()
+            resp = await sb.auth.get_user(authorization.split(" ", 1)[1])
+            if resp and resp.user:
+                return resp.user.id
+        except Exception:
+            logger.warning("Invalid/expired auth token, falling back to guest id")
+    return fallback
+
 # ----- Trip Lifecycle -----
 
 @api_router.post("/trips", response_model=Trip)
-async def create_trip(trip_data: TripCreate):
+async def create_trip(trip_data: TripCreate, authorization: Optional[str] = Header(None)):
     """
     Start a new trip - creates trip document and begins tracking session.
     """
+    resolved_user_id = await resolve_user_id(authorization, fallback=trip_data.user_id or "default_user")
     trip = Trip(
-        user_id=trip_data.user_id,
+        user_id=resolved_user_id,
         guardian_phone=trip_data.guardian_phone,
         guardian_fcm_token=trip_data.guardian_fcm_token
     )
@@ -562,19 +669,21 @@ async def create_trip(trip_data: TripCreate):
     trip_dict = {k: v for k, v in trip_dict.items() if v is not None}
     
     try:
-        supabase.table("trips").insert(trip_dict).execute()
+        sb = await get_supabase()
+        await sb.table("trips").insert(trip_dict).execute()
         logger.info(f"Trip created: {trip.id}")
     except Exception as e:
         logger.error(f"Supabase insert error for trip: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create trip: {str(e)}")
-    
+
     return trip
 
 
 @api_router.get("/trips/{trip_id}")
 async def get_trip(trip_id: str):
     """Get trip details including all location and motion data"""
-    result = supabase.table("trips").select("*").eq("id", trip_id).execute()
+    sb = await get_supabase()
+    result = await sb.table("trips").select("*").eq("id", trip_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Trip not found")
     return result.data[0]
@@ -584,52 +693,61 @@ async def end_trip(trip_id: str):
     """
     End an active trip - stops all tracking.
     """
-    result = supabase.table("trips").select("*").eq("id", trip_id).execute()
+    sb = await get_supabase()
+    result = await sb.table("trips").select("id").eq("id", trip_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Trip not found")
-    
+
     end_time = datetime.utcnow()
-    supabase.table("trips").update({
+    await sb.table("trips").update({
         "status": "ended",
         "end_time": end_time.isoformat()
     }).eq("id", trip_id).execute()
-    
+
     logger.info(f"Trip ended: {trip_id}")
     return {"message": "Trip ended", "trip_id": trip_id, "end_time": end_time.isoformat()}
 
 @api_router.put("/trips/{trip_id}/guardian")
 async def update_guardian(trip_id: str, guardian: GuardianUpdate):
     """Update guardian contact information for a trip"""
-    result = supabase.table("trips").select("*").eq("id", trip_id).execute()
+    sb = await get_supabase()
+    result = await sb.table("trips").select("id").eq("id", trip_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Trip not found")
-    
+
     update_data = {}
     if guardian.guardian_phone:
         update_data["guardian_phone"] = guardian.guardian_phone
     if guardian.guardian_fcm_token:
         update_data["guardian_fcm_token"] = guardian.guardian_fcm_token
-    
+
     if update_data:
-        supabase.table("trips").update(update_data).eq("id", trip_id).execute()
-    
+        await sb.table("trips").update(update_data).eq("id", trip_id).execute()
+
     return {"message": "Guardian updated", "trip_id": trip_id}
 
-# ----- Supabase Helper: Append to JSON array column -----
+# ----- Supabase Helpers -----
 
-def supabase_get_trip(trip_id: str) -> dict:
+async def supabase_get_trip(trip_id: str) -> dict:
     """Fetch a trip by ID from Supabase, raise 404 if not found."""
-    result = supabase.table("trips").select("*").eq("id", trip_id).execute()
+    sb = await get_supabase()
+    result = await sb.table("trips").select("*").eq("id", trip_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Trip not found")
     return result.data[0]
 
-def supabase_append_to_array(trip_id: str, column: str, new_item: dict):
-    """Append an item to a JSON array column in the trips table."""
-    trip = supabase_get_trip(trip_id)
+async def supabase_append_to_array(trip_id: str, column: str, new_item: dict):
+    """Append an item to a JSON array column in the trips table.
+
+    Only used for `risk_events` now, which is written to rarely (only on
+    detection), so the read-modify-write cost here is negligible. Location
+    and motion data go straight into location_events/sensor_events instead.
+    """
+    trip = await supabase_get_trip(trip_id)
     existing = trip.get(column) or []
     existing.append(new_item)
-    supabase.table("trips").update({column: existing}).eq("id", trip_id).execute()
+    sb = await get_supabase()
+    await sb.table("trips").update({column: existing}).eq("id", trip_id).execute()
 
 # ----- Location Tracking -----
 
@@ -638,13 +756,10 @@ async def add_location(trip_id: str, data: dict, background_tasks: BackgroundTas
     """
     Add a location point to the trip.
     Accepts flexible JSON: {lat, lng} OR {latitude, longitude}.
-    Writes to location_events table AND trips.locations array.
-    Triggers risk evaluation after adding location.
+    Writes to location_events (the single source of truth for location
+    history) and triggers risk evaluation in the background.
     """
     try:
-        print("==== LOCATION RECEIVED ====")
-        print(data)
-
         # Flexible key resolution: accept lat/lng or latitude/longitude
         lat = data.get("lat") or data.get("latitude")
         lng = data.get("lng") or data.get("longitude")
@@ -655,37 +770,25 @@ async def add_location(trip_id: str, data: dict, background_tasks: BackgroundTas
         if lat is None or lng is None:
             return {"error": "Missing lat/lng or latitude/longitude in request body"}
 
-        # Insert into location_events table
-        loc_response = supabase.table("location_events").insert({
+        source = source if source in ["gps", "cellular_unwiredlabs"] else "gps"
+
+        sb = await get_supabase()
+        await sb.table("location_events").insert({
             "user_id": trip_id,
             "latitude": float(lat),
             "longitude": float(lng),
+            "accuracy": float(accuracy),
+            "source": source,
+            "accuracy_radius": float(accuracy_radius) if accuracy_radius is not None else None,
         }).execute()
-        print("Supabase location_events response:", loc_response)
 
-        # Also append to trips.locations array for risk evaluation
-        try:
-            trip = supabase_get_trip(trip_id)
-            if trip.get('status') == 'active':
-                loc_point = LocationPoint(
-                    latitude=float(lat),
-                    longitude=float(lng),
-                    accuracy=float(accuracy),
-                    source=source if source in ["gps", "cellular_unwiredlabs"] else "gps",
-                    accuracy_radius=float(accuracy_radius) if accuracy_radius is not None else None,
-                )
-                loc_dict = loc_point.model_dump()
-                loc_dict['timestamp'] = loc_dict['timestamp'].isoformat()
-                supabase_append_to_array(trip_id, "locations", loc_dict)
-                # Trigger risk evaluation in background
-                background_tasks.add_task(check_and_alert_risk, trip_id)
-        except Exception as trip_err:
-            logger.warning(f"Could not update trip locations array: {trip_err}")
+        # Trigger risk evaluation in background (only meaningful for active trips)
+        background_tasks.add_task(check_and_alert_risk, trip_id)
 
         return {"status": "stored"}
 
     except Exception as e:
-        print("ERROR:", str(e))
+        logger.error(f"add_location error for trip {trip_id}: {e}")
         return {"error": str(e)}
 
 @api_router.post("/cellular-triangulation")
@@ -700,8 +803,9 @@ async def cellular_triangulation(request: CellularTriangulationRequest):
     
     IMPORTANT: Cellular/IP triangulation is approximate. Never override good GPS data.
     """
-    trip = supabase_get_trip(request.trip_id)
-    
+    sb = await get_supabase()
+    await supabase_get_trip(request.trip_id)  # 404s if the trip doesn't exist
+
     if UNWIRED_LABS_API_KEY == 'demo_key':
         # Demo mode - return simulated location
         logger.warning("Unwired Labs API key not configured - using demo response")
@@ -712,19 +816,15 @@ async def cellular_triangulation(request: CellularTriangulationRequest):
             "source": "cellular_unwiredlabs",
             "status": "demo_mode"
         }
-        
-        loc_point = LocationPoint(
-            latitude=demo_response["latitude"],
-            longitude=demo_response["longitude"],
-            source="cellular_unwiredlabs",
-            accuracy_radius=demo_response["accuracy_radius"]
-        )
-        
-        loc_dict = loc_point.model_dump()
-        loc_dict['timestamp'] = loc_dict['timestamp'].isoformat()
-        
-        supabase_append_to_array(request.trip_id, "locations", loc_dict)
-        
+
+        await sb.table("location_events").insert({
+            "user_id": request.trip_id,
+            "latitude": demo_response["latitude"],
+            "longitude": demo_response["longitude"],
+            "source": "cellular_unwiredlabs",
+            "accuracy_radius": demo_response["accuracy_radius"],
+        }).execute()
+
         return demo_response
     
     # Real Unwired Labs API call
@@ -757,24 +857,19 @@ async def cellular_triangulation(request: CellularTriangulationRequest):
             }
             logger.info("Using IP-based geolocation (no cell data provided)")
         
-        async with httpx.AsyncClient() as http_client:
-            response = await http_client.post(url, json=payload, timeout=10.0)
-        
+        response = await http_client.post(url, json=payload, timeout=10.0)
+
         data = response.json()
-        
+
         if data.get("status") == "ok":
-            loc_point = LocationPoint(
-                latitude=data["lat"],
-                longitude=data["lon"],
-                source="cellular_unwiredlabs",
-                accuracy_radius=data.get("accuracy", 5000)  # IP-based is less accurate
-            )
-            
-            loc_dict = loc_point.model_dump()
-            loc_dict['timestamp'] = loc_dict['timestamp'].isoformat()
-            
-            supabase_append_to_array(request.trip_id, "locations", loc_dict)
-            
+            await sb.table("location_events").insert({
+                "user_id": request.trip_id,
+                "latitude": data["lat"],
+                "longitude": data["lon"],
+                "source": "cellular_unwiredlabs",
+                "accuracy_radius": data.get("accuracy", 5000),  # IP-based is less accurate
+            }).execute()
+
             method = "cell_tower" if request.mcc else "ip_geolocation"
             logger.info(f"Triangulation successful ({method}) for trip {request.trip_id}: lat={data['lat']}, lon={data['lon']}, accuracy={data.get('accuracy', 5000)}m")
             
@@ -810,20 +905,12 @@ async def add_motion_event(trip_id: str, data: dict, background_tasks: Backgroun
     """
     Add a motion sensor event.
     Accepts flexible JSON: {x, y, z} OR {accel_variance, gyro_variance}.
-    Writes to sensor_events table AND trips.motion_events array.
+    Writes to sensor_events (the single source of truth for motion history),
+    with the computed variance/panic fields merged into the same JSON
+    sensor_data column so no schema change is needed there.
     Evaluates if motion indicates panic (rule-based, no ML).
     """
     try:
-        print("==== MOTION RECEIVED ====")
-        print(data)
-
-        # Insert raw data into sensor_events table
-        sensor_response = supabase.table("sensor_events").insert({
-            "user_id": trip_id,
-            "sensor_data": data,
-        }).execute()
-        print("Supabase sensor_events response:", sensor_response)
-
         # Compute variance values for risk detection
         # Support both {x, y, z} and {accel_variance, gyro_variance} formats
         if "accel_variance" in data and "gyro_variance" in data:
@@ -835,8 +922,13 @@ async def add_motion_event(trip_id: str, data: dict, background_tasks: Backgroun
             accel_variance = magnitude
             gyro_variance = 0.0  # No gyro data in x/y/z format; default to 0
         else:
-            # Unknown format — still stored in sensor_events, skip risk calc
+            # Unknown format — still stored, skip risk calc
             logger.warning(f"Unknown motion data format for trip {trip_id}: {data}")
+            sb = await get_supabase()
+            await sb.table("sensor_events").insert({
+                "user_id": trip_id,
+                "sensor_data": data,
+            }).execute()
             return {"status": "stored", "note": "Unknown format, skipped risk evaluation"}
 
         # Determine if this is panic movement (rule-based)
@@ -845,29 +937,30 @@ async def add_motion_event(trip_id: str, data: dict, background_tasks: Backgroun
             gyro_variance > PANIC_GYRO_THRESHOLD
         )
 
-        # Also append to trips.motion_events array for risk evaluation
-        try:
-            trip = supabase_get_trip(trip_id)
-            if trip.get('status') == 'active':
-                motion_event = MotionEvent(
-                    accel_variance=accel_variance,
-                    gyro_variance=gyro_variance,
-                    is_panic=is_panic,
-                )
-                motion_dict = motion_event.model_dump()
-                motion_dict['timestamp'] = motion_dict['timestamp'].isoformat()
-                supabase_append_to_array(trip_id, "motion_events", motion_dict)
+        sensor_data = {
+            **data,
+            "accel_variance": accel_variance,
+            "gyro_variance": gyro_variance,
+            "is_panic": is_panic,
+        }
 
-                if is_panic:
-                    logger.warning(f"Panic movement detected for trip {trip_id}")
-                    background_tasks.add_task(check_and_alert_risk, trip_id)
-        except Exception as trip_err:
-            logger.warning(f"Could not update trip motion_events array: {trip_err}")
+        sb = await get_supabase()
+        await sb.table("sensor_events").insert({
+            "user_id": trip_id,
+            "sensor_data": sensor_data,
+        }).execute()
+
+        if is_panic:
+            logger.warning(f"Panic movement detected for trip {trip_id}")
+            # Only trigger a risk-evaluation pass on panic motion, so routine
+            # accelerometer ticks (which can arrive very frequently) don't
+            # each cost a DB round trip.
+            background_tasks.add_task(check_and_alert_risk, trip_id)
 
         return {"status": "stored"}
 
     except Exception as e:
-        print("ERROR:", str(e))
+        logger.error(f"add_motion_event error for trip {trip_id}: {e}")
         return {"error": str(e)}
 
 # ----- Risk Evaluation -----
@@ -877,34 +970,35 @@ async def check_and_alert_risk(trip_id: str):
     Background task to evaluate risk and trigger alerts if needed.
     """
     try:
-        result = supabase.table("trips").select("*").eq("id", trip_id).execute()
+        sb = await get_supabase()
+        result = await sb.table("trips").select("*").eq("id", trip_id).execute()
         if not result.data or result.data[0].get('status') != 'active':
             return
         trip = result.data[0]
-        
-        risk_event = await evaluate_risk_rules(trip)
-        
+
+        risk_event = await evaluate_risk_rules(trip_id)
+
         if risk_event:
             # Add risk event to trip
             risk_dict = risk_event.model_dump()
             risk_dict['timestamp'] = risk_dict['timestamp'].isoformat()
-            
+
             # Trigger alerts
             alert_results = await trigger_alerts(trip, risk_event)
             risk_dict['push_sent'] = alert_results['push_sent']
             risk_dict['sms_sent'] = alert_results['sms_sent']
             risk_dict['alert_sent'] = alert_results['push_sent'] or alert_results['sms_sent']
-            
-            supabase_append_to_array(trip_id, "risk_events", risk_dict)
-            supabase.table("trips").update({
+
+            await supabase_append_to_array(trip_id, "risk_events", risk_dict)
+            await sb.table("trips").update({
                 "status": "alert",
                 "last_risk_check": datetime.utcnow().isoformat()
             }).eq("id", trip_id).execute()
-            
+
             logger.warning(f"RISK DETECTED for trip {trip_id}: {risk_event.rule_name}")
         else:
             # Update last check time
-            supabase.table("trips").update({
+            await sb.table("trips").update({
                 "last_risk_check": datetime.utcnow().isoformat()
             }).eq("id", trip_id).execute()
     except Exception as e:
@@ -913,13 +1007,13 @@ async def check_and_alert_risk(trip_id: str):
 @api_router.post("/trips/{trip_id}/evaluate-risk")
 async def manual_risk_evaluation(trip_id: str):
     """Manually trigger risk evaluation for a trip"""
-    result = supabase.table("trips").select("*").eq("id", trip_id).execute()
+    sb = await get_supabase()
+    result = await sb.table("trips").select("id").eq("id", trip_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Trip not found")
-    trip = result.data[0]
-    
-    risk_event = await evaluate_risk_rules(trip)
-    
+
+    risk_event = await evaluate_risk_rules(trip_id)
+
     if risk_event:
         return {
             "risk_detected": True,
@@ -936,33 +1030,39 @@ async def get_debug_info(trip_id: str):
     Debug endpoint for transparency - shows current tracking state.
     Useful for demo and judges.
     """
-    trip = supabase_get_trip(trip_id)
-    
-    locations = trip.get('locations', [])
-    motion_events = trip.get('motion_events', [])
-    risk_events = trip.get('risk_events', [])
-    
-    # Get last location info
-    last_location = locations[-1] if locations else None
+    sb = await get_supabase()
+    trip = await supabase_get_trip(trip_id)
+
+    (
+        last_locations,
+        recent_motion,
+        location_count_result,
+        motion_count_result,
+    ) = await asyncio.gather(
+        _fetch_last_locations(sb, trip_id, limit=1),
+        _fetch_recent_motion(sb, trip_id, now_ist() - timedelta(minutes=5), limit=5),
+        sb.table("location_events").select("id", count="exact").eq("user_id", trip_id).limit(1).execute(),
+        sb.table("sensor_events").select("id", count="exact").eq("user_id", trip_id).limit(1).execute(),
+    )
+
+    last_location = last_locations[-1] if last_locations else None
     tracking_source = last_location.get('source', 'none') if last_location else 'none'
     accuracy = last_location.get('accuracy', 0) if last_location else 0
     accuracy_radius = last_location.get('accuracy_radius') if last_location else None
-    
-    # Check recent panic
-    recent_motion = motion_events[-5:] if motion_events else []
+
     has_panic = any(m.get('is_panic', False) for m in recent_motion)
-    
-    # Get last risk event
+
+    risk_events = trip.get('risk_events', [])
     last_risk = risk_events[-1] if risk_events else None
-    
+
     return {
         "trip_id": trip_id,
         "status": trip.get('status'),
         "tracking_source": tracking_source,
         "accuracy": accuracy,
         "accuracy_radius": accuracy_radius,
-        "total_locations": len(locations),
-        "total_motion_events": len(motion_events),
+        "total_locations": location_count_result.count,
+        "total_motion_events": motion_count_result.count,
         "motion_status": "panic_detected" if has_panic else "normal",
         "last_risk_rule": last_risk.get('rule_name') if last_risk else None,
         "last_risk_confidence": last_risk.get('confidence') if last_risk else None,
@@ -973,7 +1073,8 @@ async def get_debug_info(trip_id: str):
 @api_router.get("/trips/active/list")
 async def list_active_trips():
     """List all active trips"""
-    result = supabase.table("trips").select("id,start_time,status").eq("status", "active").limit(100).execute()
+    sb = await get_supabase()
+    result = await sb.table("trips").select("id,start_time,status").eq("status", "active").limit(100).execute()
     return result.data
 
 # ----- Test Alert Endpoint (for demo) -----
@@ -981,15 +1082,17 @@ async def list_active_trips():
 @api_router.post("/trips/{trip_id}/test-alert")
 async def test_alert(trip_id: str):
     """Test alert system - sends test notification/SMS"""
-    trip = supabase_get_trip(trip_id)
-    
+    sb = await get_supabase()
+    trip = await supabase_get_trip(trip_id)
+    last_locations = await _fetch_last_locations(sb, trip_id, limit=1)
+
     test_risk = RiskEvent(
         rule_name="TEST_ALERT",
         contributing_signals=["manual_test"],
         confidence=1.0,
-        last_known_location=trip.get('locations', [{}])[-1] if trip.get('locations') else None
+        last_known_location=last_locations[-1] if last_locations else None
     )
-    
+
     results = await trigger_alerts(trip, test_risk)
     
     return {
@@ -998,6 +1101,160 @@ async def test_alert(trip_id: str):
         "sms_sent": results['sms_sent'],
         "guardian_phone": trip.get('guardian_phone', 'not_set')
     }
+
+# ===========================================
+# Emergency Contacts (list-based, supersedes the 3 flat
+# guardian_phone fields on trips for the offline SOS pipeline)
+# ===========================================
+
+@api_router.get("/emergency-contacts", response_model=List[EmergencyContactOut])
+async def list_emergency_contacts(user_id: str = "default_user"):
+    sb = await get_supabase()
+    result = await (
+        sb.table("emergency_contacts")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("priority")
+        .execute()
+    )
+    return result.data
+
+@api_router.post("/emergency-contacts", response_model=EmergencyContactOut)
+async def create_emergency_contact(contact: EmergencyContactIn):
+    sb = await get_supabase()
+    row = contact.model_dump()
+    result = await sb.table("emergency_contacts").insert(row).execute()
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create emergency contact")
+    return result.data[0]
+
+@api_router.put("/emergency-contacts/{contact_id}", response_model=EmergencyContactOut)
+async def update_emergency_contact(contact_id: str, contact: EmergencyContactIn):
+    sb = await get_supabase()
+    result = await (
+        sb.table("emergency_contacts")
+        .update(contact.model_dump())
+        .eq("id", contact_id)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Emergency contact not found")
+    return result.data[0]
+
+@api_router.delete("/emergency-contacts/{contact_id}")
+async def delete_emergency_contact(contact_id: str):
+    sb = await get_supabase()
+    await sb.table("emergency_contacts").delete().eq("id", contact_id).execute()
+    return {"message": "Emergency contact deleted", "id": contact_id}
+
+# ===========================================
+# Offline-First SOS Events
+#
+# These are distinct from the autonomous trips/RISK_RULES pipeline above:
+# an sos_events row represents a locally-persisted, confidence-scored SOS
+# raised by the native motion-detection service (or a manual trigger),
+# synced here once a communication path (internet) becomes available.
+# ===========================================
+
+async def _get_contacts_for_alert(sb, user_id: str) -> List[dict]:
+    result = await (
+        sb.table("emergency_contacts")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("priority")
+        .execute()
+    )
+    return result.data
+
+async def _server_side_alert_for_sos(sb, event_row: dict) -> None:
+    """
+    Redundant server-side delivery attempt for a synced SOS event, covering
+    the case where the client's own on-device SMS attempt silently failed
+    (no SIM credit, carrier block, etc). Best-effort — failures are logged,
+    never raised, since the client's own persisted record is authoritative.
+    """
+    try:
+        contacts = await _get_contacts_for_alert(sb, event_row.get("user_id") or "default_user")
+        if not contacts:
+            return
+        lat = event_row.get("latitude")
+        lon = event_row.get("longitude")
+        location = {"latitude": lat, "longitude": lon} if lat is not None and lon is not None else None
+        message = f"JAGRITI SOS: {event_row.get('trigger_reason', 'Emergency detected')}. Please check on me now."
+        for contact in contacts:
+            await send_sms_alert(contact["phone_number"], message, location)
+    except Exception as e:
+        logger.error(f"Server-side SOS alert failed for event {event_row.get('id')}: {e}")
+
+@api_router.post("/sos/sync")
+async def sync_sos_events(payload: SosEventSyncRequest):
+    """
+    Idempotent upsert of one or more offline-queued SOS events from the
+    native Room queue. Safe to call repeatedly (e.g. from a WorkManager
+    retry) for the same client_event_id.
+    """
+    sb = await get_supabase()
+    synced_ids = []
+
+    for event in payload.events:
+        row = event.model_dump()
+        for key, value in row.items():
+            if isinstance(value, datetime):
+                row[key] = value.isoformat()
+        row["synced_at"] = datetime.utcnow().isoformat()
+
+        existing = await (
+            sb.table("sos_events")
+            .select("id,status")
+            .eq("client_event_id", event.client_event_id)
+            .execute()
+        )
+
+        is_new = not existing.data
+        if is_new:
+            result = await sb.table("sos_events").insert(row).execute()
+            saved = result.data[0] if result.data else row
+        else:
+            result = await (
+                sb.table("sos_events")
+                .update(row)
+                .eq("client_event_id", event.client_event_id)
+                .execute()
+            )
+            saved = result.data[0] if result.data else row
+
+        # Only fire the redundant server-side alert the first time we see
+        # this event synced (and it's a real emergency, not a cancelled one).
+        if is_new and not event.cancelled:
+            await _server_side_alert_for_sos(sb, saved)
+
+        synced_ids.append(saved.get("id", event.client_event_id))
+
+    return {"synced_ids": synced_ids, "status": "SERVER_SYNCED"}
+
+@api_router.get("/sos/events", response_model=List[SosEventOut])
+async def list_sos_events(user_id: str = "default_user"):
+    sb = await get_supabase()
+    result = await (
+        sb.table("sos_events")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return result.data
+
+@api_router.patch("/sos/events/{event_id}")
+async def update_sos_event(event_id: str, update: SosEventStatusUpdate):
+    sb = await get_supabase()
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    if not update_data:
+        return {"message": "No changes", "id": event_id}
+    update_data["updated_at"] = datetime.utcnow().isoformat()
+    result = await sb.table("sos_events").update(update_data).eq("id", event_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="SOS event not found")
+    return result.data[0]
 
 # ===========================================
 # Delhi Metro Station Dataset (from EMPI Reference Table)
@@ -1124,8 +1381,7 @@ async def get_nearby_police_stations(lat: float, lng: float) -> List[dict]:
         out center;
         """
         
-        async with httpx.AsyncClient() as client:
-            response = await client.post(overpass_url, data={"data": query}, timeout=15.0)
+        response = await http_client.post(overpass_url, data={"data": query}, timeout=15.0)
             
         if response.status_code == 200:
             data = response.json()
@@ -1163,8 +1419,7 @@ async def get_safe_spots(lat: float, lng: float) -> List[dict]:
         out;
         """
         
-        async with httpx.AsyncClient() as client:
-            response = await client.post(overpass_url, data={"data": query}, timeout=15.0)
+        response = await http_client.post(overpass_url, data={"data": query}, timeout=15.0)
             
         if response.status_code == 200:
             data = response.json()
@@ -1220,8 +1475,7 @@ async def geocode_place(place_name: str, limit: int = 5) -> List[GeocodeResult]:
             "User-Agent": "NirbhayApp/1.0 (Women Safety App)"
         }
         
-        async with httpx.AsyncClient() as client:
-            response = await client.get(nominatim_url, params=params, headers=headers, timeout=10.0)
+        response = await http_client.get(nominatim_url, params=params, headers=headers, timeout=10.0)
             
         if response.status_code == 200:
             data = response.json()
@@ -1299,10 +1553,13 @@ async def analyze_route_safety(request: RouteRequest):
     origin_area_score, origin_area_desc = calculate_area_safety(request.origin_lat, request.origin_lng)
     dest_area_score, dest_area_desc = calculate_area_safety(dest_lat, dest_lng)
     
-    # Get nearby police stations for safety boost
-    police_stations = await get_nearby_police_stations(
-        (request.origin_lat + dest_lat) / 2,
-        (request.origin_lng + dest_lng) / 2
+    # Get nearby police stations and safe spots concurrently — both are
+    # independent Overpass lookups around the same midpoint.
+    midpoint_lat = (request.origin_lat + dest_lat) / 2
+    midpoint_lng = (request.origin_lng + dest_lng) / 2
+    police_stations, nearby_safe_spots = await asyncio.gather(
+        get_nearby_police_stations(midpoint_lat, midpoint_lng),
+        get_safe_spots(midpoint_lat, midpoint_lng),
     )
     police_score = min(90, 50 + len(police_stations) * 10) if police_stations else 50
     police_desc = f"{len(police_stations)} police stations within 2km" if police_stations else "No police stations nearby"
@@ -1470,12 +1727,6 @@ async def analyze_route_safety(request: RouteRequest):
         {"lat": request.origin_lat, "lng": request.origin_lng, "type": "origin"},
         {"lat": dest_lat, "lng": dest_lng, "type": "destination"}
     ]
-    
-    # Get nearby safe spots
-    nearby_safe_spots = await get_safe_spots(
-        (request.origin_lat + dest_lat) / 2,
-        (request.origin_lng + dest_lng) / 2
-    )
     
     # Generate recommendations
     recommendations = []

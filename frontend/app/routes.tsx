@@ -25,6 +25,8 @@ import {
   haversineKm,
   CrimeHotspot,
 } from '../services/delhiCrimeData';
+import { fonts, ThemeColors } from '../constants/theme';
+import { useTheme } from '../contexts/ThemeContext';
 
 /* ─────────────────── Types ─────────────────── */
 interface SafetyFactor {
@@ -74,6 +76,8 @@ type ActiveTab = 'route' | 'hotspots' | 'corridors' | 'police';
 
 /* ─────────────────── Component ─────────────────── */
 export default function SafeRoutesScreen() {
+  const { colors, theme } = useTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -191,17 +195,17 @@ export default function SafeRoutesScreen() {
   /* ── colours / helpers ── */
   const getSafetyColor = (level: string) => {
     switch (level) {
-      case 'safe':     return '#2ed573';
-      case 'moderate': return '#f39c12';
-      case 'risky':    return '#ff4757';
-      default:         return '#888';
+      case 'safe':     return colors.success;
+      case 'moderate': return colors.amber;
+      case 'risky':    return colors.danger;
+      default:         return colors.textSecondary;
     }
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 80) return '#2ed573';
-    if (score >= 60) return '#f39c12';
-    return '#ff4757';
+    if (score >= 80) return colors.success;
+    if (score >= 60) return colors.amber;
+    return colors.danger;
   };
 
   const getIconName = (key: string): any => {
@@ -226,7 +230,7 @@ export default function SafeRoutesScreen() {
     const origin = currentLocation;
     const dest = analysis?.route_points?.[1];
     const safeSpots = analysis?.nearby_safe_spots || [];
-    const safetyColor = analysis ? getSafetyColor(analysis.safety_level) : '#3498db';
+    const safetyColor = analysis ? getSafetyColor(analysis.safety_level) : colors.primary;
 
     // Prepare hotspot data for map
     const hotspotsJson = JSON.stringify(
@@ -274,21 +278,22 @@ export default function SafeRoutesScreen() {
         <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
         <style>
           * { margin:0; padding:0; box-sizing:border-box; }
-          body { background:#0f0f0f; }
-          #map { width:100%; height:100vh; }
+          body { background:${theme === 'dark' ? '#161620' : '#F8F8FC'}; font-family:'Manrope',system-ui,sans-serif; }
+          #map { width:100%; height:100vh; background:${theme === 'dark' ? '#161620' : '#fff'}; }
+          .leaflet-tile-pane { filter: ${theme === 'dark' ? 'invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9)' : 'none'}; }
           .leaflet-routing-container { display:none !important; }
 
           .route-info {
             position:absolute; bottom:10px; left:10px; right:10px; z-index:1000;
-            background:rgba(15,15,15,0.92); backdrop-filter:blur(10px);
+            background:${theme === 'dark' ? 'rgba(28,28,40,0.94)' : 'rgba(255,255,255,0.94)'}; backdrop-filter:blur(10px);
             border-radius:12px; padding:10px 14px;
             display:flex; justify-content:space-around; align-items:center;
-            border:1px solid rgba(255,255,255,0.1);
+            border:1px solid ${colors.border};
           }
           .item { text-align:center; }
-          .label { color:#888; font-size:10px; text-transform:uppercase; letter-spacing:0.5px; }
-          .value { color:#fff; font-size:16px; font-weight:700; margin-top:2px; }
-          .divider { width:1px; height:30px; background:rgba(255,255,255,0.15); }
+          .label { color:${colors.textMuted}; font-size:10px; text-transform:uppercase; letter-spacing:0.5px; }
+          .value { color:${colors.textPrimary}; font-size:16px; font-weight:700; margin-top:2px; }
+          .divider { width:1px; height:30px; background:${colors.border}; }
 
           @keyframes pulse {
             0% { transform:scale(1); opacity:1; }
@@ -296,23 +301,23 @@ export default function SafeRoutesScreen() {
           }
           .origin-pulse {
             width:24px; height:24px; border-radius:50%;
-            background:rgba(46,213,115,0.3); position:absolute;
+            background:rgba(62,156,116,0.3); position:absolute;
             animation:pulse 1.5s ease-out infinite;
           }
 
           .hs-popup { min-width:160px; font-family:sans-serif; }
-          .hs-popup .hs-name { font-size:13px; font-weight:700; margin-bottom:4px; }
+          .hs-popup .hs-name { font-size:13px; font-weight:700; margin-bottom:4px; color:#232538; }
           .hs-popup .hs-score { font-size:11px; margin-bottom:2px; }
-          .hs-popup .hs-crimes { font-size:10px; color:#555; }
-          .hs-popup .hs-peak { font-size:10px; color:#888; margin-top:3px; }
+          .hs-popup .hs-crimes { font-size:10px; color:#8A8DA3; }
+          .hs-popup .hs-peak { font-size:10px; color:#9497AC; margin-top:3px; }
 
           /* Legend */
           .legend {
             position:absolute; top:10px; right:10px; z-index:1000;
-            background:rgba(15,15,15,0.88); border-radius:10px;
-            padding:8px 10px; border:1px solid rgba(255,255,255,0.08);
+            background:${theme === 'dark' ? 'rgba(28,28,40,0.92)' : 'rgba(255,255,255,0.92)'}; border-radius:10px;
+            padding:8px 10px; border:1px solid ${colors.border};
           }
-          .legend-item { display:flex; align-items:center; gap:6px; margin-bottom:4px; font-size:10px; color:#ccc; }
+          .legend-item { display:flex; align-items:center; gap:6px; margin-bottom:4px; font-size:10px; color:${theme === 'dark' ? '#B7B9D0' : '#54566B'}; }
           .legend-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
         </style>
       </head>
@@ -329,12 +334,12 @@ export default function SafeRoutesScreen() {
         </div>
 
         <div class="legend">
-          <div class="legend-item"><div class="legend-dot" style="background:#2ed573;"></div>Low Risk</div>
-          <div class="legend-item"><div class="legend-dot" style="background:#f39c12;"></div>Medium Risk</div>
-          <div class="legend-item"><div class="legend-dot" style="background:#ff6b35;"></div>High Risk</div>
-          <div class="legend-item"><div class="legend-dot" style="background:#ff4757;"></div>Very High</div>
-          <div class="legend-item"><div class="legend-dot" style="background:#3498db;"></div>Police Station</div>
-          <div class="legend-item"><div class="legend-dot" style="background:#a29bfe;"></div>Safe Corridor</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#3E9C74;"></div>Low Risk</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#D9A544;"></div>Medium Risk</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#D97757;"></div>High Risk</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#D96570;"></div>Very High</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#5A6FC4;"></div>Police Station</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#7C6FD9;"></div>Safe Corridor</div>
         </div>
 
         <script>
@@ -346,7 +351,7 @@ export default function SafeRoutesScreen() {
 
           /* ── Crime hotspot markers ── */
           var hotspots = ${hotspotsJson};
-          var riskColors = { LOW:'#2ed573', MEDIUM:'#f39c12', HIGH:'#ff6b35', VERY_HIGH:'#ff4757' };
+          var riskColors = { LOW:'#3E9C74', MEDIUM:'#D9A544', HIGH:'#D97757', VERY_HIGH:'#D96570' };
 
           hotspots.forEach(function(h) {
             var col = riskColors[h.risk_level] || '#888';
@@ -370,7 +375,7 @@ export default function SafeRoutesScreen() {
           corridors.forEach(function(sc) {
             var pts = sc.waypoints.map(function(w){ return [w.lat, w.lng]; });
             L.polyline(pts, {
-              color: '#a29bfe', weight: 3, opacity: 0.7, dashArray: '6, 5'
+              color: '#7C6FD9', weight: 3, opacity: 0.7, dashArray: '6, 5'
             }).addTo(map).bindPopup('<b>' + sc.name + '</b><br>Risk Score: ' + sc.risk_score);
           });
 
@@ -379,7 +384,7 @@ export default function SafeRoutesScreen() {
           police.forEach(function(p) {
             var icon = L.divIcon({
               className: '',
-              html: '<div style="width:18px;height:18px;border-radius:50%;background:#3498db;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 6px rgba(52,152,219,0.7);">🚔</div>',
+              html: '<div style="width:18px;height:18px;border-radius:50%;background:#5A6FC4;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 6px rgba(90,111,196,0.7);">🚔</div>',
               iconSize: [18, 18], iconAnchor: [9, 9]
             });
             L.marker([p.lat, p.lng], { icon: icon })
@@ -392,7 +397,7 @@ export default function SafeRoutesScreen() {
             className: '',
             html: '<div style="position:relative;width:24px;height:24px;">' +
                   '<div class="origin-pulse"></div>' +
-                  '<div style="width:14px;height:14px;border-radius:50%;background:#2ed573;border:3px solid #fff;position:absolute;top:5px;left:5px;box-shadow:0 0 8px rgba(46,213,115,0.6);"></div>' +
+                  '<div style="width:14px;height:14px;border-radius:50%;background:#3E9C74;border:3px solid #fff;position:absolute;top:5px;left:5px;box-shadow:0 0 8px rgba(62,156,116,0.6);"></div>' +
                   '</div>',
             iconSize: [24, 24], iconAnchor: [12, 12]
           });
@@ -406,7 +411,7 @@ export default function SafeRoutesScreen() {
           var destIcon = L.divIcon({
             className: '',
             html: '<div style="position:relative;width:24px;height:34px;">' +
-                  '<div style="width:24px;height:24px;border-radius:50% 50% 50% 0;background:#ff4757;border:3px solid #fff;transform:rotate(-45deg);box-shadow:0 0 8px rgba(255,71,87,0.6);"></div>' +
+                  '<div style="width:24px;height:24px;border-radius:50% 50% 50% 0;background:#D96570;border:3px solid #fff;transform:rotate(-45deg);box-shadow:0 0 8px rgba(217,101,112,0.6);"></div>' +
                   '<div style="width:6px;height:6px;border-radius:50%;background:#fff;position:absolute;top:9px;left:9px;"></div>' +
                   '</div>',
             iconSize: [24, 34], iconAnchor: [12, 34]
@@ -419,7 +424,7 @@ export default function SafeRoutesScreen() {
             .map(
               (spot) =>
                 `L.circleMarker([${spot.lat}, ${spot.lng}], {
-                  radius:7, fillColor:'#3498db', color:'#fff', weight:2, fillOpacity:0.85
+                  radius:7, fillColor:'#5A6FC4', color:'#fff', weight:2, fillOpacity:0.85
                 }).addTo(map).bindPopup('<b>${spot.name.replace(/'/g, "\\'")}</b><br>${spot.distance_m}m away');`
             )
             .join('\n')}
@@ -465,7 +470,7 @@ export default function SafeRoutesScreen() {
       </body>
       </html>
     `;
-  }, [analysis, currentLocation]);
+  }, [analysis, currentLocation, theme, colors]);
 
   /* ─────────────────── Render helpers ─────────────────── */
 
@@ -477,14 +482,14 @@ export default function SafeRoutesScreen() {
       </View>
       <View style={styles.delhiIndexRow}>
         <View style={styles.delhiIndexItem}>
-          <Text style={[styles.delhiIndexVal, { color: '#ff4757' }]}>
+          <Text style={[styles.delhiIndexVal, { color: colors.danger }]}>
             {DELHI_CRIME_DATA.metadata.delhi_crime_index_2025}
           </Text>
           <Text style={styles.delhiIndexLabel}>Crime Index</Text>
         </View>
         <View style={styles.delhiDivider} />
         <View style={styles.delhiIndexItem}>
-          <Text style={[styles.delhiIndexVal, { color: '#2ed573' }]}>
+          <Text style={[styles.delhiIndexVal, { color: colors.success }]}>
             {DELHI_CRIME_DATA.metadata.delhi_safety_index_2025}
           </Text>
           <Text style={styles.delhiIndexLabel}>Safety Index</Text>
@@ -509,7 +514,7 @@ export default function SafeRoutesScreen() {
           <Ionicons
             name={tab.icon as any}
             size={18}
-            color={activeTab === tab.key ? '#3498db' : '#666'}
+            color={activeTab === tab.key ? '#fff' : colors.textMuted}
           />
           <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
             {tab.label}
@@ -527,7 +532,7 @@ export default function SafeRoutesScreen() {
         {/* From */}
         <View style={styles.inputGroup}>
           <View style={styles.inputLabel}>
-            <Ionicons name="navigate" size={20} color="#2ed573" />
+            <Ionicons name="navigate" size={20} color={colors.success} />
             <Text style={styles.labelText}>From (Current Location)</Text>
           </View>
           <TouchableOpacity
@@ -537,20 +542,20 @@ export default function SafeRoutesScreen() {
           >
             {locationLoading ? (
               <View style={styles.locationContent}>
-                <ActivityIndicator size="small" color="#2ed573" />
+                <ActivityIndicator size="small" color={colors.success} />
                 <Text style={styles.locationText}>Getting location…</Text>
               </View>
             ) : currentLocation ? (
               <View style={styles.locationContent}>
-                <Ionicons name="checkmark-circle" size={20} color="#2ed573" />
+                <Ionicons name="checkmark-circle" size={20} color={colors.success} />
                 <Text style={styles.locationText}>
-                  {currentLocation.lat.toFixed(4)}, {currentLocation.lng.toFixed(4)}
+                  Your Current Location
                 </Text>
-                <Ionicons name="refresh" size={18} color="#888" />
+                <Ionicons name="refresh" size={18} color={colors.textSecondary} />
               </View>
             ) : (
               <View style={styles.locationContent}>
-                <Ionicons name="alert-circle" size={20} color="#ff4757" />
+                <Ionicons name="alert-circle" size={20} color={colors.danger} />
                 <Text style={styles.locationTextError}>
                   {locationError || 'Tap to get location'}
                 </Text>
@@ -562,27 +567,27 @@ export default function SafeRoutesScreen() {
         {/* To */}
         <View style={styles.inputGroup}>
           <View style={styles.inputLabel}>
-            <Ionicons name="flag" size={20} color="#ff4757" />
+            <Ionicons name="flag" size={20} color={colors.danger} />
             <Text style={styles.labelText}>To (Destination)</Text>
           </View>
           <View style={styles.searchContainer}>
             <TextInput
               style={styles.searchInput}
               placeholder="Search for a place…"
-              placeholderTextColor="#666"
+              placeholderTextColor={colors.textPlaceholder}
               value={destinationText}
               onChangeText={(t) => { setDestinationText(t); setSelectedDestination(null); }}
             />
-            {searching && <ActivityIndicator size="small" color="#3498db" style={styles.searchSpinner} />}
+            {searching && <ActivityIndicator size="small" color={colors.primary} style={styles.searchSpinner} />}
             {selectedDestination && (
-              <Ionicons name="checkmark-circle" size={20} color="#2ed573" style={styles.selectedIcon} />
+              <Ionicons name="checkmark-circle" size={20} color={colors.success} style={styles.selectedIcon} />
             )}
           </View>
           {searchResults.length > 0 && (
             <View style={styles.searchResults}>
               {searchResults.map((r, i) => (
                 <TouchableOpacity key={i} style={styles.searchResultItem} onPress={() => selectDestination(r)}>
-                  <Ionicons name="location-outline" size={18} color="#3498db" />
+                  <Ionicons name="location-outline" size={18} color={colors.primary} />
                   <View style={styles.resultTextContainer}>
                     <Text style={styles.resultName}>{r.name}</Text>
                     <Text style={styles.resultAddress} numberOfLines={1}>{r.display_name}</Text>
@@ -644,7 +649,7 @@ export default function SafeRoutesScreen() {
             {analysis.factors.map((f, i) => (
               <View key={i} style={styles.factorCard}>
                 <View style={styles.factorHeader}>
-                  <Ionicons name={getIconName(f.icon)} size={20} color="#3498db" />
+                  <Ionicons name={getIconName(f.icon)} size={20} color={colors.primary} />
                   <Text style={styles.factorName}>{f.name}</Text>
                   <Text style={[styles.factorScore, { color: getScoreColor(f.score) }]}>{f.score}%</Text>
                 </View>
@@ -685,7 +690,7 @@ export default function SafeRoutesScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {analysis.nearby_safe_spots.map((s, i) => (
                   <View key={i} style={styles.safeSpotCard}>
-                    <Ionicons name={getIconName(s.icon)} size={24} color="#3498db" />
+                    <Ionicons name={getIconName(s.icon)} size={24} color={colors.primary} />
                     <Text style={styles.safeSpotName} numberOfLines={1}>{s.name}</Text>
                     <Text style={styles.safeSpotDistance}>{s.distance_m}m away</Text>
                   </View>
@@ -700,7 +705,7 @@ export default function SafeRoutesScreen() {
             <View style={styles.recsCard}>
               {analysis.recommendations.map((r, i) => (
                 <View key={i} style={styles.recItem}>
-                  <Ionicons name="checkmark-circle" size={18} color="#2ed573" />
+                  <Ionicons name="checkmark-circle" size={18} color={colors.success} />
                   <Text style={styles.recText}>{r}</Text>
                 </View>
               ))}
@@ -745,11 +750,11 @@ export default function SafeRoutesScreen() {
 
             <View style={styles.hotspotMeta}>
               <View style={styles.hotspotMetaItem}>
-                <Ionicons name="navigate-outline" size={12} color="#888" />
+                <Ionicons name="navigate-outline" size={12} color={colors.textSecondary} />
                 <Text style={styles.hotspotMetaText}>{h.distance_from_user_km.toFixed(1)} km</Text>
               </View>
               <View style={styles.hotspotMetaItem}>
-                <Ionicons name="time-outline" size={12} color="#888" />
+                <Ionicons name="time-outline" size={12} color={colors.textSecondary} />
                 <Text style={styles.hotspotMetaText}>Peak {h.peak_hours[0]}</Text>
               </View>
             </View>
@@ -767,7 +772,7 @@ export default function SafeRoutesScreen() {
               <View style={styles.hotspotExpanded}>
                 <Text style={styles.hotspotNotes}>{h.notes}</Text>
                 <View style={styles.hotspotSafeHours}>
-                  <Ionicons name="checkmark-circle-outline" size={14} color="#2ed573" />
+                  <Ionicons name="checkmark-circle-outline" size={14} color={colors.success} />
                   <Text style={styles.safeHoursText}>Safer: {h.safe_hours[0]}</Text>
                 </View>
                 <Text style={styles.incidentDensity}>
@@ -808,7 +813,7 @@ export default function SafeRoutesScreen() {
               ))}
             </View>
             <View style={styles.corridorNote}>
-              <Ionicons name="information-circle-outline" size={14} color="#3498db" />
+              <Ionicons name="information-circle-outline" size={14} color={colors.primary} />
               <Text style={styles.corridorNoteText}>{sc.notes}</Text>
             </View>
           </View>
@@ -825,12 +830,12 @@ export default function SafeRoutesScreen() {
         <Text style={styles.sectionTitle}>Emergency Quick Dial</Text>
         <View style={styles.emergencyGrid}>
           {[
-            { label: 'Police',          number: DELHI_CRIME_DATA.emergency_contacts.police,           icon: 'shield-outline',        color: '#3498db' },
-            { label: 'Women Helpline',  number: DELHI_CRIME_DATA.emergency_contacts.women_helpline,   icon: 'heart-outline',         color: '#e84393' },
-            { label: 'Ambulance',       number: DELHI_CRIME_DATA.emergency_contacts.ambulance,        icon: 'medical-outline',       color: '#2ed573' },
-            { label: 'Unified 112',     number: DELHI_CRIME_DATA.emergency_contacts.unified_emergency,icon: 'call-outline',          color: '#f39c12' },
-            { label: 'Fire',            number: DELHI_CRIME_DATA.emergency_contacts.fire,             icon: 'flame-outline',         color: '#ff6b35' },
-            { label: 'Delhi PCR',       number: DELHI_CRIME_DATA.emergency_contacts.delhi_police_pcr, icon: 'radio-outline',         color: '#a29bfe' },
+            { label: 'Police',          number: DELHI_CRIME_DATA.emergency_contacts.police,           icon: 'shield-outline',        color: colors.primary },
+            { label: 'Women Helpline',  number: DELHI_CRIME_DATA.emergency_contacts.women_helpline,   icon: 'heart-outline',         color: colors.danger },
+            { label: 'Ambulance',       number: DELHI_CRIME_DATA.emergency_contacts.ambulance,        icon: 'medical-outline',       color: colors.success },
+            { label: 'Unified 112',     number: DELHI_CRIME_DATA.emergency_contacts.unified_emergency,icon: 'call-outline',          color: colors.amber },
+            { label: 'Fire',            number: DELHI_CRIME_DATA.emergency_contacts.fire,             icon: 'flame-outline',         color: colors.amber },
+            { label: 'Delhi PCR',       number: DELHI_CRIME_DATA.emergency_contacts.delhi_police_pcr, icon: 'radio-outline',         color: colors.purple },
           ].map((e, i) => (
             <TouchableOpacity
               key={i}
@@ -855,7 +860,7 @@ export default function SafeRoutesScreen() {
           <View key={i} style={styles.policeCard}>
             <View style={styles.policeCardLeft}>
               <View style={styles.policeIconBg}>
-                <Ionicons name="shield-checkmark" size={20} color="#3498db" />
+                <Ionicons name="shield-checkmark" size={20} color={colors.primary} />
               </View>
               <View>
                 <Text style={styles.policeName}>{ps.name}</Text>
@@ -875,7 +880,7 @@ export default function SafeRoutesScreen() {
 
       {/* Disclaimer */}
       <View style={styles.disclaimerCard}>
-        <Ionicons name="information-circle-outline" size={16} color="#888" />
+        <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
         <Text style={styles.disclaimerText}>
           Data grounded in NCRB Crime in India 2023/2025, Numbeo Delhi Index, and Delhi Police
           district reports. Individual lat/lng points are illustrative. Replace with live feeds for
@@ -892,7 +897,7 @@ export default function SafeRoutesScreen() {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <View style={styles.headerText}>
             <Text style={styles.title}>Safe Routes</Text>
@@ -917,19 +922,19 @@ export default function SafeRoutesScreen() {
 }
 
 /* ─────────────────── Styles ─────────────────── */
-const styles = StyleSheet.create({
-  container:   { flex: 1, backgroundColor: '#0f0f0f' },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  container:   { flex: 1, backgroundColor: colors.background },
   scrollContent: { padding: 20, paddingBottom: 40 },
 
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   backButton: { padding: 8, marginRight: 12 },
   headerText: { flex: 1 },
-  title:    { fontSize: 24, fontWeight: 'bold', color: '#fff' },
-  subtitle: { fontSize: 13, color: '#888', marginTop: 2 },
+  title:    { fontSize: 24, fontFamily: fonts.extraBold, color: colors.textPrimary },
+  subtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 2, fontFamily: fonts.regular },
 
   /* Delhi banner */
   delhiBanner: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 14,
     flexDirection: 'row',
@@ -937,187 +942,196 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#2a2a2a',
+    borderColor: colors.border,
   },
   delhiBannerLeft: { flex: 1 },
-  delhiBannerTitle: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  delhiBannerSub:   { color: '#666', fontSize: 11, marginTop: 2 },
+  delhiBannerTitle: { color: colors.textPrimary, fontSize: 13, fontFamily: fonts.bold },
+  delhiBannerSub:   { color: colors.textMuted, fontSize: 11, marginTop: 2, fontFamily: fonts.regular },
   delhiIndexRow:    { flexDirection: 'row', alignItems: 'center' },
   delhiIndexItem:   { alignItems: 'center', paddingHorizontal: 10 },
-  delhiIndexVal:    { fontSize: 20, fontWeight: 'bold' },
-  delhiIndexLabel:  { color: '#666', fontSize: 10, marginTop: 2 },
-  delhiDivider:     { width: 1, height: 32, backgroundColor: '#333' },
+  delhiIndexVal:    { fontSize: 20, fontFamily: fonts.extraBold },
+  delhiIndexLabel:  { color: colors.textMuted, fontSize: 10, marginTop: 2, fontFamily: fonts.regular },
+  delhiDivider:     { width: 1, height: 32, backgroundColor: colors.border },
 
   /* Tabs */
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.primaryTintStrong,
     borderRadius: 12,
     padding: 4,
     marginBottom: 20,
   },
   tab: {
     flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 9,
+    backgroundColor: 'transparent',
   },
-  tabActive: { backgroundColor: '#1e3a5f' },
-  tabLabel:  { color: '#666', fontSize: 10, marginTop: 3 },
-  tabLabelActive: { color: '#3498db', fontWeight: '600' },
+  tabActive: { backgroundColor: colors.primary },
+  tabLabel:  { color: colors.textMuted, fontSize: 10, marginTop: 3, fontFamily: fonts.regular },
+  tabLabelActive: { color: '#fff', fontFamily: fonts.semiBold },
 
   /* Inputs */
   inputSection: { marginBottom: 20 },
   inputGroup:   { marginBottom: 16 },
   inputLabel:   { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
-  labelText:    { color: '#fff', fontSize: 15, fontWeight: '600', flex: 1 },
-  locationBox:  { backgroundColor: '#1a1a1a', borderRadius: 12, padding: 14 },
+  labelText:    { color: colors.textPrimary, fontSize: 15, fontFamily: fonts.semiBold, flex: 1 },
+  locationBox:  { backgroundColor: colors.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: colors.border },
   locationContent: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  locationText: { color: '#fff', fontSize: 14, flex: 1 },
-  locationTextError: { color: '#ff4757', fontSize: 14, flex: 1 },
+  locationText: { color: colors.textPrimary, fontSize: 14, flex: 1 },
+  locationTextError: { color: colors.danger, fontSize: 14, flex: 1 },
 
   searchContainer: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#1a1a1a', borderRadius: 12, paddingHorizontal: 14,
+    backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 14,
+    borderWidth: 1, borderColor: colors.border,
   },
-  searchInput:  { flex: 1, paddingVertical: 14, color: '#fff', fontSize: 14 },
+  searchInput:  { flex: 1, paddingVertical: 14, color: colors.textPrimary, fontSize: 14 },
   searchSpinner: { marginLeft: 8 },
   selectedIcon: { marginLeft: 8 },
-  searchResults: { backgroundColor: '#1a1a1a', borderRadius: 12, marginTop: 8, overflow: 'hidden' },
+  searchResults: {
+    backgroundColor: colors.surface, borderRadius: 12, marginTop: 8, overflow: 'hidden',
+    borderWidth: 1, borderColor: colors.border,
+  },
   searchResultItem: {
     flexDirection: 'row', alignItems: 'center', padding: 14,
-    borderBottomWidth: 1, borderBottomColor: '#333', gap: 10,
+    borderBottomWidth: 1, borderBottomColor: colors.border, gap: 10,
   },
   resultTextContainer: { flex: 1 },
-  resultName:    { color: '#fff', fontSize: 14, fontWeight: '600' },
-  resultAddress: { color: '#888', fontSize: 12, marginTop: 2 },
+  resultName:    { color: colors.textPrimary, fontSize: 14, fontFamily: fonts.semiBold },
+  resultAddress: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
 
   analyzeButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#3498db', borderRadius: 12, padding: 16, gap: 8, marginTop: 8,
+    backgroundColor: colors.primary, borderRadius: 12, padding: 16, gap: 8, marginTop: 8,
   },
-  analyzeButtonDisabled: { backgroundColor: '#555' },
-  analyzeButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  analyzeButtonDisabled: { backgroundColor: colors.textMuted },
+  analyzeButtonText: { color: '#fff', fontSize: 16, fontFamily: fonts.semiBold },
 
   /* Map */
   mapContainer: { height: 300, borderRadius: 16, overflow: 'hidden', marginBottom: 20 },
   map: { flex: 1 },
 
   /* Score Card */
-  scoreCard:    { backgroundColor: '#1a1a1a', borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 20, borderWidth: 2 },
+  scoreCard:    { backgroundColor: colors.surface, borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 20, borderWidth: 2 },
   scoreHeader:  { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
-  scoreTitle:   { color: '#888', fontSize: 14 },
+  scoreTitle:   { color: colors.textSecondary, fontSize: 14 },
   levelBadge:   { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
-  levelText:    { color: '#fff', fontSize: 12, fontWeight: '600' },
-  scoreValue:   { fontSize: 64, fontWeight: 'bold' },
-  scoreMax:     { color: '#666', fontSize: 18 },
+  levelText:    { color: '#fff', fontSize: 12, fontFamily: fonts.semiBold },
+  scoreValue:   { fontSize: 64, fontFamily: fonts.extraBold },
+  scoreMax:     { color: colors.textMuted, fontSize: 18 },
 
   /* Sections */
   section:       { marginBottom: 20 },
-  sectionTitle:  { color: '#888', fontSize: 13, fontWeight: '700', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
-  sectionSubtitle: { color: '#555', fontSize: 12, marginBottom: 12 },
+  sectionTitle:  { color: colors.textSecondary, fontSize: 13, fontFamily: fonts.bold, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionSubtitle: { color: colors.textMuted, fontSize: 12, marginBottom: 12 },
 
   /* Factor Cards */
-  factorCard:   { backgroundColor: '#1a1a1a', borderRadius: 12, padding: 16, marginBottom: 12 },
+  factorCard:   { backgroundColor: colors.surface, borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: colors.border },
   factorHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
-  factorName:   { flex: 1, color: '#fff', fontSize: 14, fontWeight: '600' },
-  factorScore:  { fontSize: 16, fontWeight: 'bold' },
-  progressBar:  { height: 4, backgroundColor: '#333', borderRadius: 2, marginBottom: 8 },
+  factorName:   { flex: 1, color: colors.textPrimary, fontSize: 14, fontFamily: fonts.semiBold },
+  factorScore:  { fontSize: 16, fontFamily: fonts.bold },
+  progressBar:  { height: 4, backgroundColor: colors.border, borderRadius: 2, marginBottom: 8 },
   progressFill: { height: '100%', borderRadius: 2 },
-  factorDesc:   { color: '#888', fontSize: 12 },
+  factorDesc:   { color: colors.textSecondary, fontSize: 12 },
 
   /* Transport */
-  transportCard: { backgroundColor: '#1a1a1a', borderRadius: 12, padding: 16, marginBottom: 12 },
+  transportCard: { backgroundColor: colors.surface, borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: colors.border },
   transportHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  transportIconContainer: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  transportIconContainer: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   transportInfo: { flex: 1 },
-  transportMode: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  transportTime: { color: '#888', fontSize: 12 },
+  transportMode: { color: colors.textPrimary, fontSize: 14, fontFamily: fonts.semiBold },
+  transportTime: { color: colors.textSecondary, fontSize: 12 },
   transportScoreBadge: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  transportScoreText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  transportRec: { color: '#888', fontSize: 12 },
+  transportScoreText: { color: '#fff', fontSize: 16, fontFamily: fonts.bold },
+  transportRec: { color: colors.textSecondary, fontSize: 12 },
 
   /* Safe Spots */
-  safeSpotCard: { backgroundColor: '#1a1a1a', borderRadius: 12, padding: 16, marginRight: 12, width: 140, alignItems: 'center' },
-  safeSpotName: { color: '#fff', fontSize: 12, fontWeight: '600', marginTop: 8, textAlign: 'center' },
-  safeSpotDistance: { color: '#888', fontSize: 11, marginTop: 4 },
+  safeSpotCard: { backgroundColor: colors.surface, borderRadius: 12, padding: 16, marginRight: 12, width: 140, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+  safeSpotName: { color: colors.textPrimary, fontSize: 12, fontFamily: fonts.semiBold, marginTop: 8, textAlign: 'center' },
+  safeSpotDistance: { color: colors.textSecondary, fontSize: 11, marginTop: 4 },
 
   /* Recommendations */
-  recsCard: { backgroundColor: '#1a1a1a', borderRadius: 12, padding: 16 },
+  recsCard: { backgroundColor: colors.surface, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: colors.border },
   recItem:  { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 12 },
-  recText:  { flex: 1, color: '#fff', fontSize: 14, lineHeight: 20 },
+  recText:  { flex: 1, color: colors.textPrimary, fontSize: 14, lineHeight: 20 },
 
   /* ── Hotspot card ── */
   hotspotCard: {
-    backgroundColor: '#1a1a1a', borderRadius: 12, padding: 14,
+    backgroundColor: colors.surface, borderRadius: 12, padding: 14,
     marginBottom: 12, borderLeftWidth: 4,
+    borderTopWidth: 1, borderRightWidth: 1, borderBottomWidth: 1, borderColor: colors.border,
   },
   hotspotHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   hotspotHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   hotspotHeaderRight: { alignItems: 'flex-end' },
   riskDot: { width: 10, height: 10, borderRadius: 5 },
-  hotspotName: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  hotspotDistrict: { color: '#888', fontSize: 11, marginTop: 1 },
+  hotspotName: { color: colors.textPrimary, fontSize: 14, fontFamily: fonts.bold },
+  hotspotDistrict: { color: colors.textSecondary, fontSize: 11, marginTop: 1 },
   riskBadge: { borderRadius: 8, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 2 },
-  riskBadgeText: { fontSize: 13, fontWeight: '800' },
-  riskLevel: { fontSize: 10, fontWeight: '600', marginTop: 3 },
+  riskBadgeText: { fontSize: 13, fontFamily: fonts.extraBold },
+  riskLevel: { fontSize: 10, fontFamily: fonts.semiBold, marginTop: 3 },
   hotspotMeta: { flexDirection: 'row', gap: 16, marginBottom: 8 },
   hotspotMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  hotspotMetaText: { color: '#888', fontSize: 11 },
+  hotspotMetaText: { color: colors.textSecondary, fontSize: 11 },
   crimeTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  crimeTag: { backgroundColor: '#2a2a2a', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  crimeTagText: { color: '#aaa', fontSize: 10 },
-  hotspotExpanded: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#2a2a2a' },
-  hotspotNotes: { color: '#ccc', fontSize: 12, lineHeight: 18, marginBottom: 8 },
+  crimeTag: { backgroundColor: colors.backgroundAlt, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  crimeTagText: { color: colors.textSecondary, fontSize: 10 },
+  hotspotExpanded: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
+  hotspotNotes: { color: colors.textSecondary, fontSize: 12, lineHeight: 18, marginBottom: 8 },
   hotspotSafeHours: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  safeHoursText: { color: '#2ed573', fontSize: 12 },
-  incidentDensity: { color: '#666', fontSize: 11 },
+  safeHoursText: { color: colors.success, fontSize: 12 },
+  incidentDensity: { color: colors.textMuted, fontSize: 11 },
 
   /* ── Safe Corridors ── */
   corridorCard: {
-    backgroundColor: '#1a1a1a', borderRadius: 12, padding: 14,
+    backgroundColor: colors.surface, borderRadius: 12, padding: 14,
     marginBottom: 12, borderLeftWidth: 4,
+    borderTopWidth: 1, borderRightWidth: 1, borderBottomWidth: 1, borderColor: colors.border,
   },
   corridorHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  corridorName:   { flex: 1, color: '#fff', fontSize: 14, fontWeight: '600' },
+  corridorName:   { flex: 1, color: colors.textPrimary, fontSize: 14, fontFamily: fonts.semiBold },
   waypointsList:  { marginBottom: 10 },
   waypointItem:   { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
-  waypointDot:    { width: 10, height: 10, borderRadius: 5, backgroundColor: '#a29bfe' },
-  waypointDotFirst: { backgroundColor: '#2ed573' },
-  waypointDotLast:  { backgroundColor: '#ff4757' },
-  waypointLabel:  { color: '#ccc', fontSize: 12 },
+  waypointDot:    { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.purple },
+  waypointDotFirst: { backgroundColor: colors.success },
+  waypointDotLast:  { backgroundColor: colors.danger },
+  waypointLabel:  { color: colors.textSecondary, fontSize: 12 },
   corridorNote:   { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  corridorNoteText: { flex: 1, color: '#3498db', fontSize: 12, lineHeight: 17 },
+  corridorNoteText: { flex: 1, color: colors.primary, fontSize: 12, lineHeight: 17 },
 
   /* ── Emergency contacts ── */
   emergencyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   emergencyCard: {
     width: '30%', borderRadius: 12, borderWidth: 1,
-    padding: 12, alignItems: 'center', backgroundColor: '#1a1a1a',
+    padding: 12, alignItems: 'center', backgroundColor: colors.surface,
   },
   emergencyIconBg: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  emergencyNumber: { color: '#fff', fontSize: 16, fontWeight: '800', marginBottom: 2 },
-  emergencyLabel:  { color: '#888', fontSize: 10, textAlign: 'center' },
+  emergencyNumber: { color: colors.textPrimary, fontSize: 16, fontFamily: fonts.extraBold, marginBottom: 2 },
+  emergencyLabel:  { color: colors.textSecondary, fontSize: 10, textAlign: 'center' },
 
   /* Police stations */
   policeCard: {
-    backgroundColor: '#1a1a1a', borderRadius: 12, padding: 14,
+    backgroundColor: colors.surface, borderRadius: 12, padding: 14,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10,
+    borderWidth: 1, borderColor: colors.border,
   },
   policeCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   policeIconBg: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: '#1e3a5f',
+    width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primaryTint,
     alignItems: 'center', justifyContent: 'center',
   },
-  policeName:     { color: '#fff', fontSize: 13, fontWeight: '600' },
-  policeDistance: { color: '#888', fontSize: 11, marginTop: 2 },
+  policeName:     { color: colors.textPrimary, fontSize: 13, fontFamily: fonts.semiBold },
+  policeDistance: { color: colors.textSecondary, fontSize: 11, marginTop: 2 },
   policeCallBtn:  {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#3498db', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8,
+    backgroundColor: colors.primary, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8,
   },
-  policeCallText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  policeCallText: { color: '#fff', fontSize: 13, fontFamily: fonts.semiBold },
 
   /* Disclaimer */
   disclaimerCard: {
-    flexDirection: 'row', gap: 8, backgroundColor: '#1a1a1a',
+    flexDirection: 'row', gap: 8, backgroundColor: colors.surface,
     borderRadius: 10, padding: 12, marginBottom: 8,
+    borderWidth: 1, borderColor: colors.border,
   },
-  disclaimerText: { flex: 1, color: '#666', fontSize: 11, lineHeight: 16 },
+  disclaimerText: { flex: 1, color: colors.textMuted, fontSize: 11, lineHeight: 16 },
 });

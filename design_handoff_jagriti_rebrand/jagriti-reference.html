@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#EAEAF4;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:#5A6FC4}
+a:hover{color:#7C8FD9}
+</style>
+</helmet>
+<div style="min-height:100vh;padding:56px 40px;display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start;font-family:'Manrope',system-ui,sans-serif;background:#EAEAF4">
+
+<div>
+<div style="text-align:center;margin-bottom:14px;font-weight:700;color:#4B4E66;font-size:12.5px;letter-spacing:.3px">01 · HOME DASHBOARD</div>
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" width="{{ 360 }}" height="{{ 780 }}" hint-size="360,780">
+<div style="background:#F8F8FC;min-height:100%;font-family:'Manrope',system-ui,sans-serif;padding:18px 18px 28px">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:9px">
+      <svg width="27" height="27" viewBox="0 0 40 40" style="color:#5A6FC4;flex:none"><circle cx="20" cy="8" r="5" fill="currentColor"/><path d="M8 18 C8 30 32 30 32 18" stroke="currentColor" stroke-width="6" fill="none" stroke-linecap="round"/></svg>
+      <span style="font-size:23px;font-weight:800;color:#232538;letter-spacing:-0.4px">jāgriti</span>
+    </div>
+    <button style="width:36px;height:36px;border-radius:18px;border:none;background:#F1F2FA;display:flex;align-items:center;justify-content:center">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:#7D8098"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V19a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H4a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h0A1.65 1.65 0 0011 4.09V4a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H20a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" stroke-width="1.1"/></svg>
+    </button>
+  </div>
+
+  <div style="margin-top:16px;background:#FFFFFF;border:1px solid #E4E5F1;border-radius:16px;padding:15px;display:flex;justify-content:space-around;text-align:center">
+    <div><div style="font-size:10.5px;color:#9497AC;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Tracking</div><div style="font-size:13.5px;font-weight:700;color:#7D8098">Inactive</div></div>
+    <div style="width:1px;background:#E4E5F1"></div>
+    <div><div style="font-size:10.5px;color:#9497AC;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Source</div><div style="font-size:13.5px;font-weight:700;color:#232538">GPS</div></div>
+    <div style="width:1px;background:#E4E5F1"></div>
+    <div><div style="font-size:10.5px;color:#9497AC;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Motion</div><div style="font-size:13.5px;font-weight:700;color:#3E9C74">Normal</div></div>
+  </div>
+
+  <div style="margin-top:11px;background:#FFFFFF;border:1px solid #E4E5F1;border-radius:14px;padding:13px 15px;display:flex;align-items:center;gap:11px">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" style="color:#7C8FD9;flex:none"><path d="M17 20v-2a4 4 0 00-4-4H7a4 4 0 00-4 4v2M15.5 4.5a3.5 3.5 0 010 7M20 20v-2a3.5 3.5 0 00-2.5-3.36" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/></svg>
+    <div style="flex:1;font-size:13.5px;font-weight:600;color:#232538">Guardian 1: +91 62038 16318</div>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="color:#9497AC"><path d="M16.5 3.5l4 4L8 20l-4.5 1L4.5 16.5 16.5 3.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+  </div>
+
+  <div style="margin-top:15px;width:100%;background:#5A6FC4;border-radius:18px;padding:17px;display:flex;align-items:center;justify-content:center;gap:9px;box-shadow:0 8px 20px rgba(90,111,196,.28)">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff"><path d="M6 4l14 8-14 8V4z"/></svg>
+    <span style="color:#fff;font-size:16px;font-weight:700">Start Trip</span>
+  </div>
+
+  <div style="margin-top:22px;font-size:12.5px;font-weight:700;color:#9497AC;text-transform:uppercase;letter-spacing:.4px">Safety Tools</div>
+  <div style="margin-top:9px;display:grid;grid-template-columns:1fr 1fr;gap:11px">
+    <div style="background:#FFFFFF;border:1px solid #E4E5F1;border-radius:16px;padding:15px">
+      <div style="width:36px;height:36px;border-radius:11px;background:#EEF0FB;display:flex;align-items:center;justify-content:center;margin-bottom:9px">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" style="color:#5A6FC4"><path d="M9 20l-6-2V4l6 2 6-2 6 2v14l-6-2-6 2z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 6v14M15 4v14" stroke="currentColor" stroke-width="1.7"/></svg>
+      </div>
+      <div style="font-size:13.5px;font-weight:700;color:#232538">Safe Routes</div>
+      <div style="font-size:11.5px;color:#8A8DA3;margin-top:2px">Find safer travel paths</div>
+    </div>
+    <div style="background:#FFFFFF;border:1px solid #E4E5F1;border-radius:16px;padding:15px">
+      <div style="width:36px;height:36px;border-radius:11px;background:#FBEAEC;display:flex;align-items:center;justify-content:center;margin-bottom:9px">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" style="color:#D96570"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+      </div>
+      <div style="font-size:13.5px;font-weight:700;color:#232538">Chat Safety</div>
+      <div style="font-size:11.5px;color:#8A8DA3;margin-top:2px">Analyze suspicious chats</div>
+    </div>
+  </div>
+
+  <div style="margin-top:13px;background:#FFFFFF;border:1px solid #E4E5F1;border-radius:14px;padding:12px 15px;display:flex;align-items:center;gap:10px">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:#3E9C74;flex:none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+    <div style="flex:1;font-size:12px;color:#54566B">Background protection is on — you're covered even if the app is closed</div>
+  </div>
+</div>
+</x-import>
+</div>
+
+<div>
+<div style="text-align:center;margin-bottom:14px;font-weight:700;color:#4B4E66;font-size:12.5px;letter-spacing:.3px">02 · LIVE TRIP TRACKING</div>
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" width="{{ 360 }}" height="{{ 780 }}" hint-size="360,780">
+<div style="background:#F8F8FC;min-height:100%;font-family:'Manrope',system-ui,sans-serif;padding:18px 18px 28px">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:9px">
+      <svg width="27" height="27" viewBox="0 0 40 40" style="color:#5A6FC4;flex:none"><circle cx="20" cy="8" r="5" fill="currentColor"/><path d="M8 18 C8 30 32 30 32 18" stroke="currentColor" stroke-width="6" fill="none" stroke-linecap="round"/></svg>
+      <span style="font-size:23px;font-weight:800;color:#232538;letter-spacing:-0.4px">jāgriti</span>
+    </div>
+    <button style="width:36px;height:36px;border-radius:18px;border:none;background:#F1F2FA;display:flex;align-items:center;justify-content:center">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:#7D8098"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="1.8"/></svg>
+    </button>
+  </div>
+
+  <div style="margin-top:16px;background:#FFFFFF;border:1px solid #E4E5F1;border-radius:16px;padding:15px">
+    <div style="display:flex;justify-content:space-around;text-align:center">
+      <div><div style="font-size:10.5px;color:#9497AC;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Tracking</div><div style="font-size:13.5px;font-weight:700;color:#3E9C74">Active</div></div>
+      <div style="width:1px;background:#E4E5F1"></div>
+      <div><div style="font-size:10.5px;color:#9497AC;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Source</div><div style="font-size:13.5px;font-weight:700;color:#232538">GPS</div></div>
+      <div style="width:1px;background:#E4E5F1"></div>
+      <div><div style="font-size:10.5px;color:#9497AC;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Motion</div><div style="font-size:13.5px;font-weight:700;color:#3E9C74">Normal</div></div>
+    </div>
+    <div style="height:1px;background:#E4E5F1;margin:13px 0"></div>
+    <div style="display:flex;justify-content:space-between;font-size:12.5px"><span style="color:#8A8DA3">Accuracy</span><span style="color:#5A6FC4;font-weight:700">25.2m</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-top:8px;align-items:center"><span style="color:#8A8DA3;display:flex;align-items:center;gap:6px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="color:#3E9C74"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z" stroke="currentColor" stroke-width="1.8"/></svg>Background Protection</span><span style="color:#3E9C74;font-weight:700">Active</span></div>
+  </div>
+
+  <div style="margin-top:11px;border-radius:16px;overflow:hidden;position:relative;height:200px;background:repeating-linear-gradient(135deg,#EDEFF9,#EDEFF9 10px,#E4E7F6 10px,#E4E7F6 20px);border:1px solid #E4E5F1">
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,monospace;font-size:11px;color:#8A8DA3;text-align:center;padding:0 20px">[ live map view ]</div>
+    <div style="position:absolute;bottom:10px;left:10px;background:rgba(255,255,255,.94);border-radius:10px;padding:8px 10px;font-size:10.5px;color:#54566B;display:flex;flex-direction:column;gap:4px">
+      <div style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:4px;background:#D96570"></span>Current</div>
+      <div style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:4px;background:#5A6FC4"></span>GPS Path</div>
+      <div style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:4px;background:#D9A544"></span>Cellular</div>
+    </div>
+  </div>
+
+  <div style="margin-top:11px;background:#FFFFFF;border:1px solid #E4E5F1;border-radius:14px;padding:13px 15px;display:flex;align-items:center;gap:11px">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:#7C8FD9;flex:none"><path d="M17 20v-2a4 4 0 00-4-4H7a4 4 0 00-4 4v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/></svg>
+    <div style="flex:1;font-size:13.5px;font-weight:600;color:#232538">Guardian 1: +91 62038 16318</div>
+  </div>
+
+  <div style="margin-top:15px;width:100%;background:#D96570;border-radius:18px;padding:17px;display:flex;align-items:center;justify-content:center;gap:9px;box-shadow:0 8px 20px rgba(217,101,112,.25)">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><rect x="5" y="5" width="14" height="14" rx="3"/></svg>
+    <span style="color:#fff;font-size:16px;font-weight:700">Stop Trip</span>
+  </div>
+</div>
+</x-import>
+</div>
+
+<div>
+<div style="text-align:center;margin-bottom:14px;font-weight:700;color:#4B4E66;font-size:12.5px;letter-spacing:.3px">03 · SAFE ROUTES — ROUTE</div>
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" width="{{ 360 }}" height="{{ 780 }}" hint-size="360,780">
+<div style="background:#F8F8FC;min-height:100%;font-family:'Manrope',system-ui,sans-serif;padding:18px 18px 28px">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:9px">
+    <div style="display:flex;gap:9px;align-items:flex-start">
+      <div style="width:32px;height:32px;border-radius:16px;background:#F1F2FA;display:flex;align-items:center;justify-content:center;flex:none;margin-top:2px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="color:#54566B"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div><div style="font-size:20px;font-weight:800;color:#232538">Safe Routes</div><div style="font-size:12px;color:#8A8DA3;margin-top:1px">Crime-intelligence powered navigation</div></div>
+    </div>
+    <button style="width:34px;height:34px;border-radius:17px;border:none;background:#F1F2FA;display:flex;align-items:center;justify-content:center;flex:none">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:#7D8098"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="1.8"/></svg>
+    </button>
+  </div>
+
+  <div style="margin-top:15px;background:#FFFFFF;border:1px solid #E4E5F1;border-radius:14px;padding:13px 15px;display:flex;align-items:center;justify-content:space-between">
+    <div><div style="font-size:12.5px;font-weight:700;color:#232538">Delhi Safety Index 2025</div><div style="font-size:10.5px;color:#9497AC;margin-top:2px">Source: Numbeo / NCRB</div></div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <div style="text-align:center"><div style="font-size:17px;font-weight:800;color:#D96570">59.03</div><div style="font-size:9.5px;color:#9497AC">Crime Index</div></div>
+      <div style="width:1px;height:24px;background:#E4E5F1"></div>
+      <div style="text-align:center"><div style="font-size:17px;font-weight:800;color:#3E9C74">40.97</div><div style="font-size:9.5px;color:#9497AC">Safety Index</div></div>
+    </div>
+  </div>
+
+  <div style="margin-top:11px;background:#F1F2FA;border-radius:14px;padding:5px;display:flex;gap:4px">
+    <div style="flex:1;background:#5A6FC4;border-radius:10px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 11l18-8-8 18-2-8-8-2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span style="font-size:10.5px;font-weight:700">Route</span></div>
+    <div style="flex:1;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#9497AC"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3l9-16z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span style="font-size:10.5px;font-weight:700">Hotspots</span></div>
+    <div style="flex:1;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#9497AC"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 20l-6-2V4l6 2 6-2 6 2v14l-6-2-6 2z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg><span style="font-size:10.5px;font-weight:700">Safe Paths</span></div>
+    <div style="flex:1;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#9497AC"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z" stroke="currentColor" stroke-width="1.8"/></svg><span style="font-size:10.5px;font-weight:700">Police</span></div>
+  </div>
+
+  <div style="margin-top:15px;display:flex;flex-direction:column;gap:9px">
+    <div>
+      <div style="font-size:11.5px;color:#3E9C74;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M12 2v20M12 2l7 4M12 2L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>From (Current Location)</div>
+      <div style="background:#FFFFFF;border:1px solid #E4E5F1;border-radius:12px;padding:11px 13px;font-size:13px;color:#232538">Your Current Location</div>
+    </div>
+    <div>
+      <div style="font-size:11.5px;color:#D96570;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M5 2v20M5 3h13l-3 4 3 4H5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>To (Destination)</div>
+      <div style="background:#FFFFFF;border:1px solid #E4E5F1;border-radius:12px;padding:11px 13px;font-size:13px;color:#B5B8CC">Search for a place…</div>
+    </div>
+    <div style="width:100%;background:#DDE0EC;border-radius:14px;padding:13px;display:flex;align-items:center;justify-content:center;gap:8px">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="color:#9497AC"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z" stroke="currentColor" stroke-width="1.8"/></svg>
+      <span style="color:#9497AC;font-size:14px;font-weight:700">Analyse Safety</span>
+    </div>
+    <div style="border-radius:14px;overflow:hidden;position:relative;height:180px;background:repeating-linear-gradient(135deg,#EDEFF9,#EDEFF9 10px,#E4E7F6 10px,#E4E7F6 20px);border:1px solid #E4E5F1;margin-top:6px">
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,monospace;font-size:11px;color:#8A8DA3;text-align:center;padding:0 20px">[ risk-mapped route view ]</div>
+    </div>
+  </div>
+</div>
+</x-import>
+</div>
+
+<div>
+<div style="text-align:center;margin-bottom:14px;font-weight:700;color:#4B4E66;font-size:12.5px;letter-spacing:.3px">04 · SAFE ROUTES — POLICE</div>
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" width="{{ 360 }}" height="{{ 780 }}" hint-size="360,780">
+<div style="background:#F8F8FC;min-height:100%;font-family:'Manrope',system-ui,sans-serif;padding:18px 18px 28px">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:9px">
+    <div style="display:flex;gap:9px;align-items:flex-start">
+      <div style="width:32px;height:32px;border-radius:16px;background:#F1F2FA;display:flex;align-items:center;justify-content:center;flex:none;margin-top:2px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="color:#54566B"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div><div style="font-size:20px;font-weight:800;color:#232538">Safe Routes</div><div style="font-size:12px;color:#8A8DA3;margin-top:1px">Crime-intelligence powered navigation</div></div>
+    </div>
+  </div>
+
+  <div style="margin-top:15px;background:#F1F2FA;border-radius:14px;padding:5px;display:flex;gap:4px">
+    <div style="flex:1;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#9497AC"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 11l18-8-8 18-2-8-8-2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span style="font-size:10.5px;font-weight:700">Route</span></div>
+    <div style="flex:1;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#9497AC"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3l9-16z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span style="font-size:10.5px;font-weight:700">Hotspots</span></div>
+    <div style="flex:1;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#9497AC"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 20l-6-2V4l6 2 6-2 6 2v14l-6-2-6 2z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg><span style="font-size:10.5px;font-weight:700">Safe Paths</span></div>
+    <div style="flex:1;background:#5A6FC4;border-radius:10px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z" stroke="currentColor" stroke-width="1.8"/></svg><span style="font-size:10.5px;font-weight:700">Police</span></div>
+  </div>
+
+  <div style="margin-top:16px;font-size:11.5px;font-weight:700;color:#9497AC;text-transform:uppercase;letter-spacing:.4px">Emergency Quick Dial</div>
+  <div style="margin-top:9px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+    <div style="background:#FFFFFF;border:1px solid #E4E5F1;border-radius:12px;padding:11px 5px;text-align:center"><div style="width:30px;height:30px;border-radius:15px;background:#EEF0FB;color:#5A6FC4;display:flex;align-items:center;justify-content:center;margin:0 auto 6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z" stroke="currentColor" stroke-width="1.8"/></svg></div><div style="font-size:13px;font-weight:800;color:#232538">100</div><div style="font-size:9.5px;color:#9497AC">Police</div></div>
+    <div style="background:#FFFFFF;border:1px solid #E4E5F1;border-radius:12px;padding:11px 5px;text-align:center"><div style="width:30px;height:30px;border-radius:15px;background:#FBEAEC;color:#D96570;display:flex;align-items:center;justify-content:center;margin:0 auto 6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M20.8 8.6c0 4.6-8.8 10.4-8.8 10.4S3.2 13.2 3.2 8.6a4.6 4.6 0 018.8-1.8 4.6 4.6 0 018.8 1.8z" stroke="currentColor" stroke-width="1.7"/></svg></div><div style="font-size:13px;font-weight:800;color:#232538">1091</div><div style="font-size:9.5px;color:#9497AC">Women Helpline</div></div>
+    <div style="background:#FFFFFF;border:1px solid #E4E5F1;border-radius:12px;padding:11px 5px;text-align:center"><div style="width:30px;height:30px;border-radius:15px;background:#E7F5EE;color:#3E9C74;display:flex;align-items:center;justify-content:center;margin:0 auto 6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M9 3v6M6 6h6M12 21c-4.5-2-8-5-8-10 0-2 1-3 2.5-3S9 9 9 9s1.5-2 3-2 2.5 1 2.5 3c0 5-3.5 8-8 10z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></div><div style="font-size:13px;font-weight:800;color:#232538">102</div><div style="font-size:9.5px;color:#9497AC">Ambulance</div></div>
+    <div style="background:#FFFFFF;border:1px solid #E4E5F1;border-radius:12px;padding:11px 5px;text-align:center"><div style="width:30px;height:30px;border-radius:15px;background:#FBF2E2;color:#D9A544;display:flex;align-items:center;justify-content:center;margin:0 auto 6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.7 3.6.8.6 0 1 .5 1 1v3.2c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.2c.6 0 1 .4 1 1 .1 1.3.4 2.5.8 3.6.1.4 0 .8-.2 1L6.6 10.8z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></div><div style="font-size:13px;font-weight:800;color:#232538">112</div><div style="font-size:9.5px;color:#9497AC">Unified 112</div></div>
+    <div style="background:#FFFFFF;border:1px solid #E4E5F1;border-radius:12px;padding:11px 5px;text-align:center"><div style="width:30px;height:30px;border-radius:15px;background:#FBEAE2;color:#D97757;display:flex;align-items:center;justify-content:center;margin:0 auto 6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 2s-5 5-5 10a5 5 0 0010 0c0-2-1-3-2-4 0 2-1 3-2 2-1-1 0-3-1-8z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></div><div style="font-size:13px;font-weight:800;color:#232538">101</div><div style="font-size:9.5px;color:#9497AC">Fire</div></div>
+    <div style="background:#FFFFFF;border:1px solid #E4E5F1;border-radius:12px;padding:11px 5px;text-align:center"><div style="width:30px;height:30px;border-radius:15px;background:#EEEBFB;color:#7C6FD9;display:flex;align-items:center;justify-content:center;margin:0 auto 6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 2v4M5 8l2.5 2.5M19 8l-2.5 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="14" r="6" stroke="currentColor" stroke-width="1.6"/></svg></div><div style="font-size:12px;font-weight:800;color:#232538">011-2349<br/>0000</div><div style="font-size:9.5px;color:#9497AC">Delhi PCR</div></div>
+  </div>
+
+  <div style="margin-top:18px;font-size:11.5px;font-weight:700;color:#9497AC;text-transform:uppercase;letter-spacing:.4px">Nearest Police Stations</div>
+  <div style="margin-top:9px;display:flex;flex-direction:column;gap:9px">
+    <div style="background:#FFFFFF;border:1px solid #E4E5F1;border-radius:13px;padding:12px 13px;display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:10px"><div style="width:34px;height:34px;border-radius:17px;background:#EEF0FB;display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:#5A6FC4"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z" stroke="currentColor" stroke-width="1.8"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><div style="font-size:12.5px;font-weight:700;color:#232538">Chattarpur Police Station</div><div style="font-size:11px;color:#8A8DA3;margin-top:1px">1.5 km away</div></div></div>
+      <div style="background:#5A6FC4;border-radius:16px;padding:7px 12px;display:flex;align-items:center;gap:5px"><svg width="11" height="11" viewBox="0 0 24 24" fill="#fff"><path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.7 3.6.8.6 0 1 .5 1 1v3.2c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.2c.6 0 1 .4 1 1 .1 1.3.4 2.5.8 3.6.1.4 0 .8-.2 1L6.6 10.8z"/></svg><span style="color:#fff;font-size:11.5px;font-weight:700">Call</span></div>
+    </div>
+    <div style="background:#FFFFFF;border:1px solid #E4E5F1;border-radius:13px;padding:12px 13px;display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:10px"><div style="width:34px;height:34px;border-radius:17px;background:#EEF0FB;display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:#5A6FC4"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z" stroke="currentColor" stroke-width="1.8"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><div style="font-size:12.5px;font-weight:700;color:#232538">Mehrauli Police Station</div><div style="font-size:11px;color:#8A8DA3;margin-top:1px">2.2 km away</div></div></div>
+      <div style="background:#5A6FC4;border-radius:16px;padding:7px 12px;display:flex;align-items:center;gap:5px"><svg width="11" height="11" viewBox="0 0 24 24" fill="#fff"><path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.7 3.6.8.6 0 1 .5 1 1v3.2c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.2c.6 0 1 .4 1 1 .1 1.3.4 2.5.8 3.6.1.4 0 .8-.2 1L6.6 10.8z"/></svg><span style="color:#fff;font-size:11.5px;font-weight:700">Call</span></div>
+    </div>
+  </div>
+</div>
+</x-import>
+</div>
+
+<div>
+<div style="text-align:center;margin-bottom:14px;font-weight:700;color:#4B4E66;font-size:12.5px;letter-spacing:.3px">05 · SAFE ROUTES — SAFE PATHS</div>
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" width="{{ 360 }}" height="{{ 780 }}" hint-size="360,780">
+<div style="background:#F8F8FC;min-height:100%;font-family:'Manrope',system-ui,sans-serif;padding:18px 18px 28px">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:9px">
+    <div style="display:flex;gap:9px;align-items:flex-start">
+      <div style="width:32px;height:32px;border-radius:16px;background:#F1F2FA;display:flex;align-items:center;justify-content:center;flex:none;margin-top:2px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="color:#54566B"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div><div style="font-size:20px;font-weight:800;color:#232538">Safe Routes</div><div style="font-size:12px;color:#8A8DA3;margin-top:1px">Crime-intelligence powered navigation</div></div>
+    </div>
+  </div>
+
+  <div style="margin-top:15px;background:#F1F2FA;border-radius:14px;padding:5px;display:flex;gap:4px">
+    <div style="flex:1;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#9497AC"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 11l18-8-8 18-2-8-8-2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span style="font-size:10.5px;font-weight:700">Route</span></div>
+    <div style="flex:1;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#9497AC"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3l9-16z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span style="font-size:10.5px;font-weight:700">Hotspots</span></div>
+    <div style="flex:1;background:#5A6FC4;border-radius:10px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 20l-6-2V4l6 2 6-2 6 2v14l-6-2-6 2z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg><span style="font-size:10.5px;font-weight:700">Safe Paths</span></div>
+    <div style="flex:1;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#9497AC"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z" stroke="currentColor" stroke-width="1.8"/></svg><span style="font-size:10.5px;font-weight:700">Police</span></div>
+  </div>
+
+  <div style="margin-top:16px;font-size:12.5px;font-weight:700;color:#232538">Verified Safe Corridors</div>
+  <div style="font-size:11.5px;color:#8A8DA3;margin-top:3px;margin-bottom:11px;line-height:1.4">Well-lit, patrolled routes from your area (shown on map as purple dashed lines).</div>
+  <div style="display:flex;flex-direction:column;gap:9px">
+    <div style="background:#FFFFFF;border:1px solid #E4E5F1;border-left:4px solid #3E9C74;border-radius:12px;padding:13px 15px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start"><div style="font-size:13px;font-weight:700;color:#232538">Satbari → Saket via MG Road</div><div style="font-size:10.5px;font-weight:700;color:#3E9C74;border:1px solid #BFE6D3;border-radius:8px;padding:2px 7px;flex:none;margin-left:8px">28</div></div>
+      <div style="font-size:11px;color:#8A8DA3;margin-top:7px">Satbari (Origin) → Dera Mandi → Pushp Vihar → Saket Metro</div>
+      <div style="font-size:11px;color:#5A6FC4;margin-top:7px;line-height:1.4">Well-lit arterial road. CCTV coverage. Avoid after 01:00 AM.</div>
+    </div>
+    <div style="background:#FFFFFF;border:1px solid #E4E5F1;border-left:4px solid #3E9C74;border-radius:12px;padding:13px 15px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start"><div style="font-size:13px;font-weight:700;color:#232538">Satbari → Vasant Kunj via NH48</div><div style="font-size:10.5px;font-weight:700;color:#3E9C74;border:1px solid #BFE6D3;border-radius:8px;padding:2px 7px;flex:none;margin-left:8px">22</div></div>
+      <div style="font-size:11px;color:#8A8DA3;margin-top:7px">Satbari (Origin) → Andheria More → Vasant Kunj Sector A</div>
+      <div style="font-size:11px;color:#5A6FC4;margin-top:7px;line-height:1.4">NH48 well-patrolled. Stay on main carriageway. Avoid service lanes after dark.</div>
+    </div>
+    <div style="background:#FFFFFF;border:1px solid #E4E5F1;border-left:4px solid #D9A544;border-radius:12px;padding:13px 15px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start"><div style="font-size:13px;font-weight:700;color:#232538">Satbari → AIIMS via Outer Ring Road</div><div style="font-size:10.5px;font-weight:700;color:#D9A544;border:1px solid #F0DDAE;border-radius:8px;padding:2px 7px;flex:none;margin-left:8px">30</div></div>
+      <div style="font-size:11px;color:#8A8DA3;margin-top:7px">Satbari (Origin) → Green Park → AIIMS</div>
+      <div style="font-size:11px;color:#5A6FC4;margin-top:7px;line-height:1.4">Busy ring road, some poorly-lit stretches. Prefer daytime travel.</div>
+    </div>
+  </div>
+</div>
+</x-import>
+</div>
+
+<div>
+<div style="text-align:center;margin-bottom:14px;font-weight:700;color:#4B4E66;font-size:12.5px;letter-spacing:.3px">06 · CHAT SAFETY</div>
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" width="{{ 360 }}" height="{{ 780 }}" hint-size="360,780">
+<div style="background:#F8F8FC;min-height:100%;font-family:'Manrope',system-ui,sans-serif;padding:18px 18px 28px">
+  <div style="display:flex;align-items:center;gap:9px">
+    <div style="width:32px;height:32px;border-radius:16px;background:#F1F2FA;display:flex;align-items:center;justify-content:center;flex:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="color:#54566B"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div><div style="font-size:20px;font-weight:800;color:#232538">Chat Safety</div><div style="font-size:12px;color:#8A8DA3;margin-top:1px">Detect manipulation &amp; grooming patterns</div></div>
+  </div>
+
+  <div style="margin-top:16px;background:#EEF0FB;border-radius:14px;padding:14px 15px;display:flex;gap:11px">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="color:#5A6FC4;flex:none;margin-top:1px"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M12 8v.01M12 11v5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+    <div style="font-size:12.5px;color:#4C56A0;line-height:1.5">Upload a screenshot of any suspicious chat conversation. Our AI will analyze it for potential red flags like manipulation, grooming, or social engineering tactics.</div>
+  </div>
+
+  <div style="margin-top:14px;display:flex;gap:11px">
+    <div style="flex:1;background:#FFFFFF;border:2px dashed #CFD2E8;border-radius:16px;padding:22px 8px;display:flex;flex-direction:column;align-items:center;gap:8px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style="color:#5A6FC4"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.6"/><circle cx="8.5" cy="9.5" r="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M21 16l-5-5-4 4-2-2-5 5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      <div style="font-size:12px;color:#8A8DA3;text-align:center">Select from Gallery</div>
+    </div>
+    <div style="flex:1;background:#FFFFFF;border:2px dashed #CFD2E8;border-radius:16px;padding:22px 8px;display:flex;flex-direction:column;align-items:center;gap:8px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style="color:#5A6FC4"><path d="M4 8h3l2-3h6l2 3h3v11H4V8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.3" stroke="currentColor" stroke-width="1.6"/></svg>
+      <div style="font-size:12px;color:#8A8DA3;text-align:center">Take Photo</div>
+    </div>
+  </div>
+
+  <div style="margin-top:22px;font-size:12px;font-weight:700;color:#9497AC;text-transform:uppercase;letter-spacing:.4px">Safety Tips</div>
+  <div style="margin-top:9px;background:#FFFFFF;border:1px solid #E4E5F1;border-radius:14px;padding:15px;display:flex;flex-direction:column;gap:15px">
+    <div style="display:flex;align-items:center;gap:11px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style="color:#5A6FC4;flex:none"><path d="M12 21s7-7.5 7-12a7 7 0 10-14 0c0 4.5 7 12 7 12z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg><div style="font-size:12.5px;color:#232538;line-height:1.4">Never share personal info with strangers online</div></div>
+    <div style="display:flex;align-items:center;gap:11px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style="color:#5A6FC4;flex:none"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 3l18 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><div style="font-size:12.5px;color:#232538;line-height:1.4">Be cautious of people who ask for photos or videos</div></div>
+    <div style="display:flex;align-items:center;gap:11px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style="color:#5A6FC4;flex:none"><circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M2 20c0-3.3 3.1-5.5 7-5.5s7 2.2 7 5.5M17 8a3 3 0 100-6M23 20c0-2.7-1.9-4.7-4.8-5.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><div style="font-size:12.5px;color:#232538;line-height:1.4">Talk to a trusted adult if something feels wrong</div></div>
+    <div style="display:flex;align-items:center;gap:11px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style="color:#5A6FC4;flex:none"><path d="M6 2h9l5 5v15H6V2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M15 2v5h5M9 12h6M9 16h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><div style="font-size:12.5px;color:#232538;line-height:1.4">Save evidence of suspicious conversations</div></div>
+  </div>
+</div>
+</x-import>
+</div>
+
+<div>
+<div style="text-align:center;margin-bottom:14px;font-weight:700;color:#4B4E66;font-size:12.5px;letter-spacing:.3px">07 · GUARDIAN &amp; SETTINGS</div>
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" width="{{ 360 }}" height="{{ 780 }}" hint-size="360,780">
+<div style="background:#F8F8FC;min-height:100%;font-family:'Manrope',system-ui,sans-serif;padding:18px 18px 28px">
+  <div style="display:flex;align-items:center;gap:9px">
+    <svg width="27" height="27" viewBox="0 0 40 40" style="color:#5A6FC4;flex:none"><circle cx="20" cy="8" r="5" fill="currentColor"/><path d="M8 18 C8 30 32 30 32 18" stroke="currentColor" stroke-width="6" fill="none" stroke-linecap="round"/></svg>
+    <span style="font-size:23px;font-weight:800;color:#232538;letter-spacing:-0.4px">jāgriti</span>
+  </div>
+  <div style="margin-top:20px;background:#FFFFFF;border:1px solid #E4E5F1;border-radius:16px;padding:18px">
+    <div style="font-size:15.5px;font-weight:700;color:#232538">Guardian Phone Numbers</div>
+    <div style="font-size:12px;color:#8A8DA3;margin-top:6px;line-height:1.4;margin-bottom:16px">Alerts will be sent to these numbers in case of emergency</div>
+
+    <div style="margin-bottom:12px">
+      <div style="font-size:10.5px;color:#9497AC;margin-bottom:6px;text-transform:uppercase;letter-spacing:.3px">Primary Guardian</div>
+      <div style="background:#F1F2FA;border-radius:12px;padding:13px 14px;font-size:13.5px;color:#232538">+91 62038 16318</div>
+    </div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:10.5px;color:#9497AC;margin-bottom:6px;text-transform:uppercase;letter-spacing:.3px">Guardian 2 (Optional)</div>
+      <div style="background:#F1F2FA;border-radius:12px;padding:13px 14px;font-size:13.5px;color:#B5B8CC">Enter phone number</div>
+    </div>
+    <div style="margin-bottom:16px">
+      <div style="font-size:10.5px;color:#9497AC;margin-bottom:6px;text-transform:uppercase;letter-spacing:.3px">Guardian 3 (Optional)</div>
+      <div style="background:#F1F2FA;border-radius:12px;padding:13px 14px;font-size:13.5px;color:#B5B8CC">Enter phone number</div>
+    </div>
+
+    <div style="display:flex;gap:10px">
+      <div style="flex:1;text-align:center;padding:13px;border-radius:12px;background:#F1F2FA;color:#54566B;font-size:14px;font-weight:600">Cancel</div>
+      <div style="flex:1;text-align:center;padding:13px;border-radius:12px;background:#5A6FC4;color:#fff;font-size:14px;font-weight:700">Save All</div>
+    </div>
+  </div>
+
+  <div style="margin-top:18px;font-size:11.5px;font-weight:700;color:#9497AC;text-transform:uppercase;letter-spacing:.4px">Preferences</div>
+  <div style="margin-top:9px;background:#FFFFFF;border:1px solid #E4E5F1;border-radius:14px;padding:4px 15px">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid #EEEFF7"><span style="font-size:13.5px;color:#232538">Background Protection</span><div style="width:38px;height:22px;border-radius:11px;background:#3E9C74;position:relative"><div style="width:18px;height:18px;border-radius:9px;background:#fff;position:absolute;top:2px;right:2px"></div></div></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid #EEEFF7"><span style="font-size:13.5px;color:#232538">Auto Alerts to Guardian</span><div style="width:38px;height:22px;border-radius:11px;background:#3E9C74;position:relative"><div style="width:18px;height:18px;border-radius:9px;background:#fff;position:absolute;top:2px;right:2px"></div></div></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 0"><span style="font-size:13.5px;color:#232538">Motion-based Panic Detection</span><div style="width:38px;height:22px;border-radius:11px;background:#3E9C74;position:relative"><div style="width:18px;height:18px;border-radius:9px;background:#fff;position:absolute;top:2px;right:2px"></div></div></div>
+  </div>
+</div>
+</x-import>
+</div>
+
+<div>
+<div style="text-align:center;margin-bottom:14px;font-weight:700;color:#4B4E66;font-size:12.5px;letter-spacing:.3px">08 · SAFETY CHECK ALERT</div>
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" width="{{ 360 }}" height="{{ 780 }}" hint-size="360,780">
+<div style="background:#F1F2FA;min-height:100%;font-family:'Manrope',system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px">
+  <div style="background:#FFFFFF;border-radius:22px;padding:26px 22px;width:100%;box-shadow:0 20px 50px rgba(60,64,110,.16);display:flex;flex-direction:column;align-items:center">
+    <div style="width:58px;height:58px;border-radius:29px;border:3px solid #D96570;background:#FBEAEC;display:flex;align-items:center;justify-content:center"><span style="font-size:21px;font-weight:800;color:#D96570">17</span></div>
+    <div style="font-size:11.5px;color:#8A8DA3;margin-top:9px">Respond within</div>
+
+    <div style="margin-top:18px;width:52px;height:52px;border-radius:26px;background:#FBEAEC;display:flex;align-items:center;justify-content:center">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style="color:#D96570"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v6M12 16.5v.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </div>
+    <div style="font-size:20px;font-weight:800;color:#232538;margin-top:14px">Safety Check</div>
+    <div style="font-size:12.5px;color:#8A8DA3;margin-top:5px">Unusual movement detected</div>
+    <div style="font-size:16px;font-weight:700;color:#232538;margin-top:15px">Are you feeling okay?</div>
+
+    <div style="display:flex;gap:12px;margin-top:18px;width:100%">
+      <div style="flex:1;background:#D96570;border-radius:13px;padding:13px;display:flex;align-items:center;justify-content:center;gap:7px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:#fff"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span style="color:#fff;font-size:15px;font-weight:700">No</span></div>
+      <div style="flex:1;background:#3E9C74;border-radius:13px;padding:13px;display:flex;align-items:center;justify-content:center;gap:7px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:#fff"><path d="M4 12l5 5 11-11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="color:#fff;font-size:15px;font-weight:700">Yes</span></div>
+    </div>
+    <div style="font-size:11px;color:#B5B8CC;margin-top:14px;text-align:center;line-height:1.4">If you don't respond, an alert will be sent automatically</div>
+  </div>
+</div>
+</x-import>
+</div>
+
+<div>
+<div style="text-align:center;margin-bottom:14px;font-weight:700;color:#4B4E66;font-size:12.5px;letter-spacing:.3px">09 · SAFETY CODE ENTRY</div>
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" width="{{ 360 }}" height="{{ 780 }}" hint-size="360,780">
+<div style="background:#F1F2FA;min-height:100%;font-family:'Manrope',system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px">
+  <div style="background:#FFFFFF;border-radius:22px;padding:26px 22px;width:100%;box-shadow:0 20px 50px rgba(60,64,110,.16);display:flex;flex-direction:column;align-items:center">
+    <div style="width:58px;height:58px;border-radius:29px;border:3px solid #5A6FC4;background:#EEF0FB;display:flex;align-items:center;justify-content:center"><span style="font-size:21px;font-weight:800;color:#5A6FC4">20</span></div>
+    <div style="font-size:11.5px;color:#8A8DA3;margin-top:9px">Respond within</div>
+
+    <div style="margin-top:18px;width:52px;height:52px;border-radius:26px;background:#EEF0FB;display:flex;align-items:center;justify-content:center">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style="color:#5A6FC4"><rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 10V7a4 4 0 118 0v3" stroke="currentColor" stroke-width="1.8"/></svg>
+    </div>
+    <div style="font-size:20px;font-weight:800;color:#232538;margin-top:14px">Enter Safety Code</div>
+    <div style="font-size:12.5px;color:#8A8DA3;margin-top:5px;text-align:center">Please enter your 4-digit safety code</div>
+
+    <div style="margin-top:18px;width:100%;background:#F1F2FA;border:2px solid #DDE0EC;border-radius:14px;padding:16px;text-align:center;font-size:26px;letter-spacing:14px;color:#5A6FC4;font-weight:700">• • • •</div>
+
+    <div style="margin-top:16px;width:100%;background:#5A6FC4;border-radius:13px;padding:14px;text-align:center"><span style="color:#fff;font-size:15px;font-weight:700">Verify</span></div>
+    <div style="margin-top:12px;font-size:12.5px;color:#9497AC;text-decoration:underline">Go back</div>
+  </div>
+</div>
+</x-import>
+</div>
+
+</div>
+
+</x-dc>
+</body>
+</html>

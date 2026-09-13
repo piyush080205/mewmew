@@ -1,0 +1,148 @@
+<title>Nirbhay Expo QR</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f5f2;
+    --surface: #ffffff;
+    --border: #e2e0da;
+    --ink: #1c1b19;
+    --ink-soft: #6b675f;
+    --accent: #2f6f4f;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161815;
+      --surface: #1f221e;
+      --border: #33362f;
+      --ink: #eeece6;
+      --ink-soft: #a3a095;
+      --accent: #6fcf97;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #161815;
+    --surface: #1f221e;
+    --border: #33362f;
+    --ink: #eeece6;
+    --ink-soft: #a3a095;
+    --accent: #6fcf97;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2.5rem 2.75rem 2.25rem;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 0.4rem;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    margin: 0 0 1.5rem;
+    text-wrap: balance;
+  }
+
+  #qr {
+    display: inline-flex;
+    padding: 16px;
+    background: #ffffff;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+  }
+
+  #qr img, #qr canvas {
+    display: block;
+    border-radius: 4px;
+  }
+
+  .url {
+    margin-top: 1.5rem;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    word-break: break-all;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.6rem 0.8rem;
+  }
+
+  .steps {
+    text-align: left;
+    margin: 1.5rem 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.88rem;
+    color: var(--ink-soft);
+    line-height: 1.6;
+  }
+  .steps li {
+    display: flex;
+    gap: 0.6rem;
+    margin-bottom: 0.4rem;
+  }
+  .steps li::before {
+    content: attr(data-n);
+    font-family: var(--mono);
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .note {
+    margin-top: 1.25rem;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+  }
+</style>
+
+<div class="card">
+  <p class="eyebrow">Nirbhay · Expo Go</p>
+  <h1>Scan to open on your phone</h1>
+  <div id="qr"></div>
+  <div class="url">exp://192.168.33.109:8081</div>
+  <ol class="steps">
+    <li data-n="1">Open <strong>Expo Go</strong> on your phone</li>
+    <li data-n="2">Tap <strong>Scan QR code</strong></li>
+    <li data-n="3">Point at the code above</li>
+  </ol>
+  <p class="note">Phone and computer must be on the same Wi-Fi network.</p>
+</div>
+
+<script>
+  new QRCode(document.getElementById("qr"), {
+    text: "exp://192.168.33.109:8081",
+    width: 220,
+    height: 220,
+    colorDark: "#1c1b19",
+    colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.M
+  });
+</script>

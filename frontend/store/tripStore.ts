@@ -22,6 +22,22 @@ export interface Trip {
   guardian_fcm_token?: string;
 }
 
+export interface EmergencyContact {
+  id: string;
+  name?: string;
+  phoneNumber: string;
+  priority: number;
+  isPrimary: boolean;
+}
+
+export interface SosEventSummary {
+  id: string;
+  status: string;
+  createdAt: number;
+  confidence: number;
+  triggerReason: string;
+}
+
 interface TripState {
   currentTrip: Trip | null;
   isTracking: boolean;
@@ -30,14 +46,24 @@ interface TripState {
   locations: LocationPoint[];
   motionStatus: 'normal' | 'panic_detected';
   lastRiskRule: string | null;
+  /** @deprecated kept as a compatibility shim during the emergencyContacts migration — see services/api.ts + app/index.tsx contact sync. */
   guardianPhone: string;
+  /** @deprecated see guardianPhone */
   guardianPhone2: string;
+  /** @deprecated see guardianPhone */
   guardianPhone3: string;
   trackingSource: 'gps' | 'cellular_unwiredlabs';
   accuracy: number;
-  
+  emergencyContacts: EmergencyContact[];
+  sosEvents: SosEventSummary[];
+  activeConfidence: number | null;
+  activeCountdownEventId: string | null;
+
   // Actions
   setGuardianPhone: (phone: string, index?: number) => void;
+  setEmergencyContacts: (contacts: EmergencyContact[]) => void;
+  upsertSosEvent: (event: SosEventSummary) => void;
+  setActiveCountdown: (eventId: string | null, confidence?: number | null) => void;
   setInviteVerified: (verified: boolean) => Promise<void>;
   loadInviteStatus: () => Promise<void>;
   startTrip: (trip: Trip) => void;
@@ -66,7 +92,26 @@ export const useTripStore = create<TripState>((set, get) => ({
   guardianPhone3: '',
   trackingSource: 'gps',
   accuracy: 0,
-  
+  emergencyContacts: [],
+  sosEvents: [],
+  activeConfidence: null,
+  activeCountdownEventId: null,
+
+  setEmergencyContacts: (contacts: EmergencyContact[]) => {
+    set({ emergencyContacts: contacts });
+  },
+
+  upsertSosEvent: (event: SosEventSummary) => {
+    set((state) => {
+      const existing = state.sosEvents.filter((e) => e.id !== event.id);
+      return { sosEvents: [event, ...existing].slice(0, 20) };
+    });
+  },
+
+  setActiveCountdown: (eventId: string | null, confidence: number | null = null) => {
+    set({ activeCountdownEventId: eventId, activeConfidence: eventId ? confidence : null });
+  },
+
   setGuardianPhone: async (phone: string, index: number = 1) => {
     // Persist to storage based on index
     try {
