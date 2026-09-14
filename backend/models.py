@@ -194,6 +194,38 @@ class RouteResponse(BaseModel):
     nearby_safe_spots: List[dict]
 
 # ===========================================
+# City Safety Data Models
+# ===========================================
+
+class CityDataResponse(BaseModel):
+    """Curated per-city crime/safety dataset, resolved from the user's
+    detected location. Falls back to the DEFAULT row for unlisted cities."""
+    city_name: str
+    matched: bool  # False when this is the DEFAULT fallback, not a real match
+    crime_index: Optional[float] = None
+    safety_index: Optional[float] = None
+    source: str
+    crime_hotspots: List[dict] = []
+    safe_corridors: List[dict] = []
+    police_stations: List[dict] = []
+
+# ===========================================
+# Trip Sharing Models
+# ===========================================
+
+class TripShareResponse(BaseModel):
+    """Token for a public, unauthenticated trip-viewer link."""
+    trip_id: str
+    share_token: str
+
+class SharedTripView(BaseModel):
+    """What a guardian sees at the public share link — no PII beyond what's
+    needed to check on the trip."""
+    status: str
+    ended: bool
+    last_location: Optional[dict] = None  # {latitude, longitude, timestamp}
+
+# ===========================================
 # Chat Safety Analysis Models
 # ===========================================
 

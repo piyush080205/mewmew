@@ -18,13 +18,34 @@ import * as Location from 'expo-location';
 
 import { API_URL } from '../services/api';
 import {
-  DELHI_CRIME_DATA,
   getNearbyHotspots,
   riskColor,
   riskScoreColor,
   haversineKm,
   CrimeHotspot,
+  SafeCorridor,
+  PoliceStation,
 } from '../services/delhiCrimeData';
+
+/** Numbers that work anywhere in India, unlike the old Delhi-only list. */
+const PAN_INDIA_EMERGENCY_CONTACTS = {
+  police: '100',
+  women_helpline: '1091',
+  ambulance: '102',
+  fire: '101',
+  unified_emergency: '112',
+};
+
+interface CityData {
+  city_name: string;
+  matched: boolean;
+  crime_index: number | null;
+  safety_index: number | null;
+  source: string;
+  crime_hotspots: CrimeHotspot[];
+  safe_corridors: SafeCorridor[];
+  police_stations: PoliceStation[];
+}
 import { fonts, ThemeColors } from '../constants/theme';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -93,17 +114,36 @@ export default function SafeRoutesScreen() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('route');
   const [expandedHotspot, setExpandedHotspot] = useState<string | null>(null);
 
-  /* Nearby hotspots derived from current location */
-  const nearbyHotspots = currentLocation
-    ? getNearbyHotspots(currentLocation.lat, currentLocation.lng, 20)
-    : DELHI_CRIME_DATA.crime_hotspots.slice().sort(
-        (a, b) => a.distance_from_user_km - b.distance_from_user_km
-      );
+  const [cityData, setCityData] = useState<CityData | null>(null);
+  const [cityDataLoading, setCityDataLoading] = useState(false);
+
+  /* Nearby hotspots derived from current location + the fetched city's dataset */
+  const nearbyHotspots = currentLocation && cityData
+    ? getNearbyHotspots(cityData.crime_hotspots, currentLocation.lat, currentLocation.lng, 20)
+    : [];
 
   /* ── get location ── */
   useEffect(() => {
     getCurrentLocation();
   }, []);
+
+  useEffect(() => {
+    if (currentLocation) fetchCityData(currentLocation.lat, currentLocation.lng);
+  }, [currentLocation?.lat, currentLocation?.lng]);
+
+  const fetchCityData = async (lat: number, lng: number) => {
+    setCityDataLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/safety/city-data?lat=${lat}&lng=${lng}`);
+      if (res.ok) {
+        setCityData(await res.json());
+      }
+    } catch {
+      /* silent — banner/tabs just show nothing until it succeeds */
+    } finally {
+      setCityDataLoading(false);
+    }
+  };
 
   const getCurrentLocation = async () => {
     setLocationLoading(true);
@@ -118,8 +158,9 @@ export default function SafeRoutesScreen() {
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       setCurrentLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
     } catch {
+      // No Delhi-coordinate fallback — showing a Delhi location for a user
+      // who could be anywhere would defeat the point of city detection.
       setLocationError('Could not get current location');
-      setCurrentLocation({ lat: 28.5035, lng: 77.1833 }); // Satbari fallback
     } finally {
       setLocationLoading(false);
     }
@@ -232,9 +273,9 @@ export default function SafeRoutesScreen() {
     const safeSpots = analysis?.nearby_safe_spots || [];
     const safetyColor = analysis ? getSafetyColor(analysis.safety_level) : colors.primary;
 
-    // Prepare hotspot data for map
+    // Prepare hotspot data for map (from the fetched city's dataset)
     const hotspotsJson = JSON.stringify(
-      DELHI_CRIME_DATA.crime_hotspots.map((h) => ({
+      (cityData?.crime_hotspots || []).map((h) => ({
         lat: h.lat,
         lng: h.lng,
         name: h.name.replace(/'/g, "\\'"),
@@ -246,17 +287,17 @@ export default function SafeRoutesScreen() {
     );
 
     const policeJson = JSON.stringify(
-      DELHI_CRIME_DATA.police_stations_nearby.map((p) => ({
+      (cityData?.police_stations || []).map((p) => ({
         lat: p.lat,
         lng: p.lng,
         name: p.name.replace(/'/g, "\\'"),
-        phone: p.phone,
-        dist: p.distance_from_user_km,
+        phone: p.phone || 'unavailable',
+        dist: haversineKm(origin.lat, origin.lng, p.lat, p.lng),
       }))
     );
 
     const corridorsJson = JSON.stringify(
-      DELHI_CRIME_DATA.safe_corridors.map((sc) => ({
+      (cityData?.safe_corridors || []).map((sc) => ({
         waypoints: sc.waypoints,
         name: sc.name.replace(/'/g, "\\'"),
         risk_score: sc.risk_score,
@@ -470,33 +511,48 @@ export default function SafeRoutesScreen() {
       </body>
       </html>
     `;
-  }, [analysis, currentLocation, theme, colors]);
+  }, [analysis, currentLocation, cityData, theme, colors]);
 
   /* ─────────────────── Render helpers ─────────────────── */
 
-  const renderDelhibanner = () => (
-    <View style={styles.delhiBanner}>
-      <View style={styles.delhiBannerLeft}>
-        <Text style={styles.delhiBannerTitle}>Delhi Safety Index 2025</Text>
-        <Text style={styles.delhiBannerSub}>Source: Numbeo / NCRB</Text>
-      </View>
-      <View style={styles.delhiIndexRow}>
-        <View style={styles.delhiIndexItem}>
-          <Text style={[styles.delhiIndexVal, { color: colors.danger }]}>
-            {DELHI_CRIME_DATA.metadata.delhi_crime_index_2025}
-          </Text>
-          <Text style={styles.delhiIndexLabel}>Crime Index</Text>
+  const renderCitySafetyBanner = () => {
+    if (cityDataLoading && !cityData) {
+      return (
+        <View style={styles.delhiBanner}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={[styles.delhiBannerSub, { marginLeft: 10 }]}>Detecting your city…</Text>
         </View>
-        <View style={styles.delhiDivider} />
-        <View style={styles.delhiIndexItem}>
-          <Text style={[styles.delhiIndexVal, { color: colors.success }]}>
-            {DELHI_CRIME_DATA.metadata.delhi_safety_index_2025}
+      );
+    }
+    if (!cityData) return null;
+    return (
+      <View style={styles.delhiBanner}>
+        <View style={styles.delhiBannerLeft}>
+          <Text style={styles.delhiBannerTitle}>
+            {cityData.city_name} Safety Index {cityData.matched ? '' : '(no curated data yet)'}
           </Text>
-          <Text style={styles.delhiIndexLabel}>Safety Index</Text>
+          <Text style={styles.delhiBannerSub}>Source: {cityData.source}</Text>
         </View>
+        {cityData.crime_index != null && cityData.safety_index != null ? (
+          <View style={styles.delhiIndexRow}>
+            <View style={styles.delhiIndexItem}>
+              <Text style={[styles.delhiIndexVal, { color: colors.danger }]}>
+                {cityData.crime_index}
+              </Text>
+              <Text style={styles.delhiIndexLabel}>Crime Index</Text>
+            </View>
+            <View style={styles.delhiDivider} />
+            <View style={styles.delhiIndexItem}>
+              <Text style={[styles.delhiIndexVal, { color: colors.success }]}>
+                {cityData.safety_index}
+              </Text>
+              <Text style={styles.delhiIndexLabel}>Safety Index</Text>
+            </View>
+          </View>
+        ) : null}
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderTabs = () => (
     <View style={styles.tabBar}>
@@ -793,7 +849,10 @@ export default function SafeRoutesScreen() {
       <Text style={styles.sectionSubtitle}>
         Well-lit, patrolled routes from your area (shown on map as purple dashed lines)
       </Text>
-      {DELHI_CRIME_DATA.safe_corridors.map((sc) => {
+      {!cityData || cityData.safe_corridors.length === 0 ? (
+        <Text style={styles.sectionSubtitle}>No curated safe corridors for {cityData?.city_name || 'this area'} yet.</Text>
+      ) : null}
+      {(cityData?.safe_corridors || []).map((sc) => {
         const color = riskColor(sc.risk_level);
         return (
           <View key={sc.id} style={[styles.corridorCard, { borderLeftColor: color }]}>
@@ -830,12 +889,11 @@ export default function SafeRoutesScreen() {
         <Text style={styles.sectionTitle}>Emergency Quick Dial</Text>
         <View style={styles.emergencyGrid}>
           {[
-            { label: 'Police',          number: DELHI_CRIME_DATA.emergency_contacts.police,           icon: 'shield-outline',        color: colors.primary },
-            { label: 'Women Helpline',  number: DELHI_CRIME_DATA.emergency_contacts.women_helpline,   icon: 'heart-outline',         color: colors.danger },
-            { label: 'Ambulance',       number: DELHI_CRIME_DATA.emergency_contacts.ambulance,        icon: 'medical-outline',       color: colors.success },
-            { label: 'Unified 112',     number: DELHI_CRIME_DATA.emergency_contacts.unified_emergency,icon: 'call-outline',          color: colors.amber },
-            { label: 'Fire',            number: DELHI_CRIME_DATA.emergency_contacts.fire,             icon: 'flame-outline',         color: colors.amber },
-            { label: 'Delhi PCR',       number: DELHI_CRIME_DATA.emergency_contacts.delhi_police_pcr, icon: 'radio-outline',         color: colors.purple },
+            { label: 'Police',          number: PAN_INDIA_EMERGENCY_CONTACTS.police,           icon: 'shield-outline',        color: colors.primary },
+            { label: 'Women Helpline',  number: PAN_INDIA_EMERGENCY_CONTACTS.women_helpline,   icon: 'heart-outline',         color: colors.danger },
+            { label: 'Ambulance',       number: PAN_INDIA_EMERGENCY_CONTACTS.ambulance,        icon: 'medical-outline',       color: colors.success },
+            { label: 'Unified 112',     number: PAN_INDIA_EMERGENCY_CONTACTS.unified_emergency,icon: 'call-outline',          color: colors.amber },
+            { label: 'Fire',            number: PAN_INDIA_EMERGENCY_CONTACTS.fire,             icon: 'flame-outline',         color: colors.amber },
           ].map((e, i) => (
             <TouchableOpacity
               key={i}
@@ -856,35 +914,51 @@ export default function SafeRoutesScreen() {
       {/* Police Stations */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Nearest Police Stations</Text>
-        {DELHI_CRIME_DATA.police_stations_nearby.map((ps, i) => (
-          <View key={i} style={styles.policeCard}>
-            <View style={styles.policeCardLeft}>
-              <View style={styles.policeIconBg}>
-                <Ionicons name="shield-checkmark" size={20} color={colors.primary} />
+        {(!cityData || cityData.police_stations.length === 0) && (
+          <Text style={styles.sectionSubtitle}>
+            No curated police stations for {cityData?.city_name || 'this area'} yet.
+          </Text>
+        )}
+        {(cityData?.police_stations || [])
+          .map((ps) => ({
+            ...ps,
+            distance_from_user_km: currentLocation
+              ? haversineKm(currentLocation.lat, currentLocation.lng, ps.lat, ps.lng)
+              : 0,
+          }))
+          .sort((a, b) => a.distance_from_user_km - b.distance_from_user_km)
+          .map((ps, i) => (
+            <View key={i} style={styles.policeCard}>
+              <View style={styles.policeCardLeft}>
+                <View style={styles.policeIconBg}>
+                  <Ionicons name="shield-checkmark" size={20} color={colors.primary} />
+                </View>
+                <View>
+                  <Text style={styles.policeName}>{ps.name}</Text>
+                  <Text style={styles.policeDistance}>{ps.distance_from_user_km.toFixed(1)} km away</Text>
+                </View>
               </View>
-              <View>
-                <Text style={styles.policeName}>{ps.name}</Text>
-                <Text style={styles.policeDistance}>{ps.distance_from_user_km.toFixed(1)} km away</Text>
-              </View>
+              {ps.phone ? (
+                <TouchableOpacity
+                  style={styles.policeCallBtn}
+                  onPress={() => Linking.openURL(`tel:${ps.phone}`)}
+                >
+                  <Ionicons name="call" size={16} color="#fff" />
+                  <Text style={styles.policeCallText}>Call</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.policeDistance}>No phone on file</Text>
+              )}
             </View>
-            <TouchableOpacity
-              style={styles.policeCallBtn}
-              onPress={() => Linking.openURL(`tel:${ps.phone}`)}
-            >
-              <Ionicons name="call" size={16} color="#fff" />
-              <Text style={styles.policeCallText}>Call</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
+          ))}
       </View>
 
       {/* Disclaimer */}
       <View style={styles.disclaimerCard}>
         <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
         <Text style={styles.disclaimerText}>
-          Data grounded in NCRB Crime in India 2023/2025, Numbeo Delhi Index, and Delhi Police
-          district reports. Individual lat/lng points are illustrative. Replace with live feeds for
-          production use.
+          {cityData?.source || 'Curated safety data varies in coverage by city.'} Individual
+          lat/lng points are illustrative. Replace with live feeds for production use.
         </Text>
       </View>
     </>
@@ -905,8 +979,8 @@ export default function SafeRoutesScreen() {
           </View>
         </View>
 
-        {/* Delhi Safety Banner */}
-        {renderDelhibanner()}
+        {/* City Safety Banner */}
+        {renderCitySafetyBanner()}
 
         {/* Tab Bar */}
         {renderTabs()}

@@ -23,3 +23,8 @@ def test_find_nearest_metro_returns_closest_with_distance():
     station = find_nearest_metro(28.4982, 77.1781)
     assert station["id"] == "M01"
     assert station["_dist_m"] < 50
+
+
+def test_find_nearest_metro_returns_none_far_from_delhi():
+    # Mumbai — nowhere near any Delhi Metro station
+    assert find_nearest_metro(19.0760, 72.8777) is None

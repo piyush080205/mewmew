@@ -69,6 +69,11 @@ DMRC_FIRST_METRO_MINUTE = 30
 DMRC_LAST_METRO_HOUR = 23   # 23:00 IST
 DMRC_LAST_METRO_MINUTE = 0
 
+# Beyond this, no station is a realistic "walk to metro" option — the dataset
+# only covers Delhi, so anywhere else (or far outside Delhi) must report no
+# metro rather than the nearest Delhi station regardless of distance.
+MAX_METRO_WALK_DISTANCE_M = 1500
+
 def is_metro_operational(ist_hour: int, ist_minute: int = 0) -> bool:
     """Return True if Delhi Metro is running at the given IST time."""
     total_minutes = ist_hour * 60 + ist_minute
@@ -77,7 +82,9 @@ def is_metro_operational(ist_hour: int, ist_minute: int = 0) -> bool:
     return first <= total_minutes <= last
 
 def find_nearest_metro(lat: float, lng: float) -> Optional[dict]:
-    """Return the metro station nearest to the given lat/lng."""
+    """Return the metro station nearest to the given lat/lng, or None if the
+    nearest one is farther than MAX_METRO_WALK_DISTANCE_M (e.g. the point is
+    outside Delhi, where this dataset has no coverage)."""
     best = None
     best_dist = float('inf')
     for station in DELHI_METRO_STATIONS:
@@ -85,4 +92,6 @@ def find_nearest_metro(lat: float, lng: float) -> Optional[dict]:
         if d < best_dist:
             best_dist = d
             best = {**station, '_dist_m': round(d)}
+    if best is not None and best_dist > MAX_METRO_WALK_DISTANCE_M:
+        return None
     return best

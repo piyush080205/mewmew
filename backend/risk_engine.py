@@ -8,7 +8,7 @@ from typing import Optional
 import shared
 from config import FAST2SMS_API_KEY
 from models import RiskEvent
-from utils import now_ist, is_night_time, calculate_distance
+from utils import now_ist, is_night_time, calculate_distance, build_sos_alert_message
 from db_helpers import (
     _fetch_recent_locations,
     _fetch_last_locations,
@@ -253,7 +253,11 @@ async def trigger_alerts(trip: dict, risk_event: RiskEvent) -> dict:
     # emoji above) forces UCS-2 encoding, which caps a single segment at ~70 chars
     # instead of ~160 and causes carriers/Fast2SMS to silently split the message
     # into multiple billed segments for one recipient.
-    sms_message = f"NIRBHAY SOS: {risk_event.rule_name}. Please check on me now."
+    #
+    # Location is embedded in the string itself (via build_sos_alert_message)
+    # rather than appended separately, so a missing/stale fix never silently
+    # drops off the message — it always says either a maps link or "unavailable".
+    sms_message = build_sos_alert_message(risk_event.rule_name, risk_event.last_known_location)
 
     # Try push notification first (primary)
     if guardian_fcm_token:
@@ -263,12 +267,13 @@ async def trigger_alerts(trip: dict, risk_event: RiskEvent) -> dict:
             message
         )
 
-    # SMS is mandatory fallback (always try)
+    # SMS is mandatory fallback (always try). Location is already embedded in
+    # sms_message, so pass None here to avoid appending it a second time.
     if guardian_phone:
         results["sms_sent"] = await send_sms_alert(
             guardian_phone,
             sms_message,
-            risk_event.last_known_location
+            None
         )
 
     # Log for auditability

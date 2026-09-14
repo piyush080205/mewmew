@@ -1,5 +1,6 @@
 """Trip lifecycle, location/motion ingestion, and risk-evaluation endpoints."""
 import asyncio
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -8,7 +9,15 @@ import httpx
 
 import shared
 from config import UNWIRED_LABS_API_KEY
-from models import Trip, TripCreate, GuardianUpdate, CellularTriangulationRequest, RiskEvent
+from models import (
+    Trip,
+    TripCreate,
+    GuardianUpdate,
+    CellularTriangulationRequest,
+    RiskEvent,
+    TripShareResponse,
+    SharedTripView,
+)
 from db_helpers import resolve_user_id, supabase_get_trip, _fetch_last_locations, _fetch_recent_motion
 from utils import now_ist
 from risk_engine import (
@@ -103,6 +112,54 @@ async def update_guardian(trip_id: str, guardian: GuardianUpdate):
         await sb.table("trips").update(update_data).eq("id", trip_id).execute()
 
     return {"message": "Guardian updated", "trip_id": trip_id}
+
+@router.post("/trips/{trip_id}/share", response_model=TripShareResponse)
+async def share_trip(trip_id: str):
+    """
+    Generate (or reuse) a public, unauthenticated share token for a trip, so
+    the sender can send a guardian a link that shows live trip status/location
+    without the guardian needing to install the app or log in.
+    """
+    sb = await get_supabase()
+    trip = await supabase_get_trip(trip_id)
+
+    existing_token = trip.get("share_token")
+    if existing_token:
+        return TripShareResponse(trip_id=trip_id, share_token=existing_token)
+
+    token = secrets.token_urlsafe(16)
+    await sb.table("trips").update({"share_token": token}).eq("id", trip_id).execute()
+    return TripShareResponse(trip_id=trip_id, share_token=token)
+
+
+@router.get("/trips/shared/{share_token}", response_model=SharedTripView)
+async def get_shared_trip(share_token: str):
+    """
+    Public view for a guardian who has a share link — no auth required.
+    Returns only trip status and the most recent location, nothing else.
+    """
+    sb = await get_supabase()
+    result = await sb.table("trips").select("*").eq("share_token", share_token).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Shared trip not found")
+    trip = result.data[0]
+
+    last_locations = await _fetch_last_locations(sb, trip["id"], limit=1)
+    last_location = None
+    if last_locations:
+        loc = last_locations[-1]
+        last_location = {
+            "latitude": loc["latitude"],
+            "longitude": loc["longitude"],
+            "timestamp": loc["timestamp"],
+        }
+
+    return SharedTripView(
+        status=trip.get("status", "unknown"),
+        ended=trip.get("status") == "ended",
+        last_location=last_location,
+    )
+
 
 # ----- Location Tracking -----
 

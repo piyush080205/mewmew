@@ -21,6 +21,7 @@ from models import (
 )
 from risk_engine import send_sms_alert
 from supabase_client import get_supabase
+from utils import build_sos_alert_message
 
 logger = shared.logger
 
@@ -99,9 +100,16 @@ async def _server_side_alert_for_sos(sb, event_row: dict) -> None:
         lat = event_row.get("latitude")
         lon = event_row.get("longitude")
         location = {"latitude": lat, "longitude": lon} if lat is not None and lon is not None else None
-        message = f"JAGRITI SOS: {event_row.get('trigger_reason', 'Emergency detected')}. Please check on me now."
+        # Location is embedded in the message itself (maps link, or explicit
+        # "unavailable") rather than passed separately, so it can never be
+        # silently dropped when a fix is missing or stale.
+        message = build_sos_alert_message(
+            event_row.get("trigger_reason", "Emergency detected"),
+            location,
+            location_is_fresh=bool(event_row.get("location_is_fresh", True)),
+        )
         for contact in contacts:
-            await send_sms_alert(contact["phone_number"], message, location)
+            await send_sms_alert(contact["phone_number"], message, None)
     except Exception as e:
         logger.error(f"Server-side SOS alert failed for event {event_row.get('id')}: {e}")
 

@@ -12,6 +12,7 @@ import {
   Dimensions,
   AppState,
   AppStateStatus,
+  Share,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -577,6 +578,30 @@ export default function HomeScreen() {
     router.push('/debug');
   };
 
+  // Guardian trip-sharing: get (or create) a public share token for the
+  // active trip, then hand the link to the OS share sheet so it can go out
+  // via SMS/WhatsApp/etc. No login required for whoever opens it — see
+  // backend/routers/trips.py: POST .../share, GET /api/trips/shared/{token}
+  // and frontend/app/shared/[token].tsx.
+  const handleShareTrip = async () => {
+    if (!currentTrip) return;
+    try {
+      const res = await fetch(`${API_URL}/api/trips/${currentTrip.id}/share`, { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to create share link');
+      const { share_token } = await res.json();
+      // Assumes the Expo web build is hosted at the same origin as API_URL;
+      // point this at the actual web deployment URL if that's not the case.
+      const link = `${API_URL}/shared/${share_token}`;
+      await Share.share({
+        message: `Track my trip live: ${link}`,
+        url: link,
+      });
+    } catch (err) {
+      console.error('Failed to share trip:', err);
+      Alert.alert('Error', 'Could not create a share link. Please try again.');
+    }
+  };
+
   const goToAccount = () => {
     router.push(session ? '/auth/account' : '/auth/login');
   };
@@ -780,6 +805,13 @@ export default function HomeScreen() {
           >
             <Ionicons name="person-add" size={20} color={colors.primary} />
             <Text style={styles.setGuardianText}>Set Guardian Numbers</Text>
+          </TouchableOpacity>
+        )}
+
+        {isTracking && currentTrip && (
+          <TouchableOpacity style={styles.setGuardianButton} onPress={handleShareTrip}>
+            <Ionicons name="share-social" size={20} color={colors.primary} />
+            <Text style={styles.setGuardianText}>Share Trip with Guardian</Text>
           </TouchableOpacity>
         )}
 
