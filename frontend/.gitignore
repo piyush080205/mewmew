@@ -12,6 +12,18 @@ expo-env.d.ts
 # Native
 .kotlin/
 *.orig.*
+
+# Android build artifacts (contain machine-local absolute paths;
+# must never be committed or uploaded to EAS)
+android/build/
+android/app/build/
+android/app/.cxx/
+android/.gradle/
+android/.cxx/
+android/local.properties
+android/*.log
+android/app/*.log
+hs_err_pid*.log
 *.jks
 *.p8
 *.p12

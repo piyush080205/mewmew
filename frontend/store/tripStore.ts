@@ -42,7 +42,6 @@ interface TripState {
   currentTrip: Trip | null;
   isTracking: boolean;
   isBackgroundTrackingEnabled: boolean;
-  isInviteVerified: boolean;
   locations: LocationPoint[];
   motionStatus: 'normal' | 'panic_detected';
   lastRiskRule: string | null;
@@ -64,8 +63,6 @@ interface TripState {
   setEmergencyContacts: (contacts: EmergencyContact[]) => void;
   upsertSosEvent: (event: SosEventSummary) => void;
   setActiveCountdown: (eventId: string | null, confidence?: number | null) => void;
-  setInviteVerified: (verified: boolean) => Promise<void>;
-  loadInviteStatus: () => Promise<void>;
   startTrip: (trip: Trip) => void;
   endTrip: () => void;
   addLocation: (location: LocationPoint) => void;
@@ -83,7 +80,6 @@ export const useTripStore = create<TripState>((set, get) => ({
   currentTrip: null,
   isTracking: false,
   isBackgroundTrackingEnabled: false,
-  isInviteVerified: false,
   locations: [],
   motionStatus: 'normal',
   lastRiskRule: null,
@@ -127,24 +123,6 @@ export const useTripStore = create<TripState>((set, get) => ({
       }
     } catch (e) {
       console.error('Failed to save guardian phone:', e);
-    }
-  },
-  
-  setInviteVerified: async (verified: boolean) => {
-    try {
-      set({ isInviteVerified: verified });
-      await AsyncStorage.setItem('invite_verified', verified ? 'true' : 'false');
-    } catch (e) {
-      console.error('Failed to save invite status:', e);
-    }
-  },
-  
-  loadInviteStatus: async () => {
-    try {
-      const saved = await AsyncStorage.getItem('invite_verified');
-      set({ isInviteVerified: saved === 'true' });
-    } catch (e) {
-      console.error('Failed to load invite status:', e);
     }
   },
   
