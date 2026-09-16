@@ -33,7 +33,7 @@ export const lightColors = {
 
   orange: '#D97757',
   orangeTint: '#FBEAE2',
-} as const;
+};
 
 // jāgriti dark theme — see design_handoff_jagriti_rebrand/jagriti-dark.dc.html
 export const darkColors: typeof lightColors = {

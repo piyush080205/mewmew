@@ -1,222 +1,180 @@
 
-# Nirbhay – Autonomous Women Safety System (Windows)
+# Jāgriti – Autonomous Women Safety System
 
-![Nirbhay Logo](frontend/assets/images/icon.png)
+![Jāgriti Logo](frontend/assets/images/icon.png)
 
-**Nirbhay** is an autonomous women-safety mobile application that detects unsafe travel or potential kidnapping **without any manual SOS action** and automatically alerts trusted guardians.
+**Jāgriti** is a women-safety mobile app built around an
+**offline-first, multi-signal SOS system**: it detects potential emergencies from motion
+sensors, confirms with the user before acting, and gets the alert out through whichever
+channel is actually available — on-device SMS, phone call, or the internet — without
+depending on connectivity.
 
-The system continuously monitors location and motion signals in the background and triggers alerts when abnormal behavior is detected.
-
----
-
-## Core Philosophy
-
-- **Autonomous > Manual SOS** – No button press required
-- **Reliability > Precision** – False positives are acceptable for safety
-- **Rule-based Detection** – No ML, fully explainable logic
-- **Multi-signal Fusion** – GPS + motion sensors
+It also supports WhatsApp-style **live location sharing** so a trusted contact can watch
+someone's trip in real time via a link, no app install required.
 
 ---
 
-## Features
+## Architecture
 
-### 1. Trip Lifecycle
-- Start and end trips with a single tap
-- Background GPS and motion tracking
-- Guardian phone number configuration
+```
+frontend/            Expo (React Native + expo-router) app — UI, auth, trips, live sharing
+frontend/android/app/src/main/java/com/nirbhay/safety/
+                      Native Kotlin layer — background motion monitoring & offline SOS,
+                      since this cannot be done reliably from JS alone on Android
+backend/              FastAPI service — Supabase-backed API, deployed on AWS App Runner
+```
 
-### 2. GPS + Cellular Fallback
-- High-accuracy GPS tracking (~15 meters)
-- Automatic fallback to last known location when GPS is unavailable
-- IP/Cellular-based geolocation using **Unwired Labs API**
+### Native Android SOS pipeline (`frontend/android/.../safety/sos/`)
 
-### 3. Panic Movement Detection
-- Accelerometer + gyroscope monitoring
-- Rule-based panic detection (no ML)
-- Configurable thresholds
+- `MotionForegroundService` + `MotionFeatureExtractor` — a foreground service samples
+  accelerometer/gyroscope and derives motion features (impact, jerk, rotation, inactivity).
+- `EmergencyConfidenceEngine` — fuses those features into a confidence score instead of a
+  single threshold (impact → abnormal movement → inactivity → high confidence).
+- `EmergencyConfirmationController` — shows an "Are you safe?" countdown before an SOS
+  is raised, so normal activity (walking, sitting, a dropped phone) doesn't trigger alerts.
+- `SosEventRepository` + Room (`data/`) — every SOS is persisted locally first
+  (`PENDING → SMS_ATTEMPTED → SENT → SERVER_SYNCED`) so it survives process death and
+  offline periods.
+- `CommunicationManager` — tries transports in priority order:
+  1. **`SmsTransport`** — free, on-device SMS to emergency contacts (works with just cellular).
+  2. **`CallTransport`** — fallback emergency call.
+  3. **`InternetTransport`** — syncs the event to the backend when online, and also fetches
+     the trip's live-share link to send as a free follow-up SMS.
+  4. **`BluetoothRelayTransport`** — stubbed for a future nearby-device relay; never claims
+     success today.
+- `SosSyncWorker` (WorkManager) — retries the internet sync later if it fails immediately.
 
-### 4. Safety Check System
-When panic movement is detected:
-1. Phone vibrates and shows **“Are you feeling okay?”**
-2. User has **20 seconds** to respond
-3. If **Yes** → Enter safety code (`1234`)
-4. If correct → Alert cancelled
-5. If wrong / No / No response → **SMS alert sent automatically**
+### Backend (`backend/`)
 
-### 5. SMS Alerts (Fast2SMS)
-- Automatic SMS to guardian containing:
-  - Emergency alert message
-  - Google Maps live location link
-- Uses **Fast2SMS Quick API** (no DLT registration needed)
+FastAPI + Supabase (Postgres). Key routers:
+- `routers/trips.py` + `risk_engine.py` — autonomous trip tracking and rule-based risk scoring.
+- `routers/sos.py` — account settings, emergency contacts, and `/api/sos/sync` for the
+  offline-first SOS events described above (also mints/returns live-share links).
+- `routers/safety.py`, `routers/chat.py` — safety-check flow and in-app safety chat.
+
+Deployed as a Docker container on **AWS App Runner**, built via **AWS CodeBuild**
+(see `backend/buildspec.yml`, `backend/Dockerfile`).
 
 ---
 
-## Local Setup (Windows Only)
+## Prerequisites
 
-### Prerequisites
-Make sure these are installed on **Windows**:
-
-- **Node.js 18+**
+- **Node.js 18+** and **Yarn** (`npm install -g yarn`)
 - **Python 3.9+**
-- **MongoDB** (local or Atlas)
-- **Expo Go app** on your Android/iOS phone
-- **Yarn** (`npm install -g yarn`)
+- A **Supabase** project (Postgres + auth)
+- **Expo Go** or a development build, for running on a physical Android device
+- Android Studio / JDK, only if building the native `android/` project locally
 
 ---
 
-## Backend Setup (Windows)
+## Backend Setup
 
-```bat
+```bash
 cd backend
-
-:: Create virtual environment
 python -m venv venv
-
-:: Activate virtual environment
-venv\Scripts\activate
-
-:: Install dependencies
-pip install fastapi uvicorn motor pydantic python-dotenv httpx
-
-:: Start backend server
+venv\Scripts\activate        # Windows; use `source venv/bin/activate` on macOS/Linux
+pip install -r requirements.txt
 uvicorn server:app --host 0.0.0.0 --port 8001 --reload
-````
-
-The backend will be running at:
-
-```
-http://localhost:8001
 ```
 
----
-
-## Frontend Setup (Windows)
-
-```bat
-cd frontend
-
-:: Install dependencies
-yarn install
-
-:: Start Expo
-npx expo start --tunnel
-```
-
----
-
-## Run on Physical Device
-
-1. Install **Expo Go** from Play Store / App Store
-2. Run `npx expo start --tunnel`
-3. Scan the QR code from Expo Go
-4. Grant:
-
-   * Location permission (Allow Always)
-   * Motion & activity permission
-
----
-
-## Testing the Safety System
-
-1. Start a trip and set guardian phone number
-2. Shake the phone vigorously for **5–10 seconds**
-3. Safety check modal appears
-
-### Test Scenarios
-
-* Enter `1234` → Safe (alert cancelled)
-* Enter wrong code → SMS alert sent
-* No response for 20 seconds → SMS alert sent
-* Tap **No** → SMS alert sent
-
----
-
-## Backend `.env` (Windows)
-
-Create a file named `.env` inside the `backend` folder:
+Create `backend/.env`:
 
 ```env
-# MongoDB Connection
-MONGO_URL="mongodb://localhost:27017"
-DB_NAME="nirbhay_db"
+SUPABASE_URL=
+SUPABASE_SECRET_KEY=
 
-# Unwired Labs API (Cellular / IP Geolocation)
-# https://unwiredlabs.com/
+# Optional / best-effort backup SMS gateway (on-device SMS is the primary channel)
+FAST2SMS_API_KEY=
+
+# Cellular/IP geolocation fallback when GPS is unavailable
 UNWIRED_LABS_API_KEY=
 
-# Fast2SMS API Key (SMS Alerts)
-# https://www.fast2sms.com/
-FAST2SMS_API_KEY=
+# Safety chat
+GEMINI_API_KEY=
+
+# Origin the live-sharing web page is served from
+PUBLIC_BASE_URL=http://localhost:8001
 ```
+
+Apply the database schema once, by running the setup helper and pasting the printed SQL
+into the Supabase SQL Editor (the Supabase REST client can't run DDL directly):
+
+```bash
+python setup_supabase.py
+# also run schema_live_sharing.sql, schema_trip_sharing.sql,
+# schema_city_safety.sql, schema_user_settings.sql, schema_location_events_columns.sql,
+# schema_siliguri_safety.sql
+```
+
+`schema_siliguri_safety.sql` creates `police_stations` and `safety_support_locations` tables
+(independently web-verified Siliguri, West Bengal police/hospital/fire/transit data — see
+`output/siliguri_source_audit.csv` at the repo root for the full corrections trail) and adds
+a curated `Siliguri` row to `city_safety_data` so `/api/safety/city-data` returns it for
+Siliguri-area coordinates, the same way Delhi is curated today.
 
 ---
 
-## Frontend `.env` (Windows)
+## Frontend Setup
 
-Create a file named `.env` inside the `frontend` folder.
-
-First, find your local IP address:
-
-```bat
-ipconfig
+```bash
+cd frontend
+yarn install
 ```
 
-Look for **IPv4 Address** (example: `192.168.1.100`)
+Create `frontend/.env`:
 
 ```env
 EXPO_PUBLIC_BACKEND_URL="http://YOUR_LOCAL_IP:8001"
+EXPO_PUBLIC_SUPABASE_URL=
+EXPO_PUBLIC_SUPABASE_ANON_KEY=
 ```
 
-### Example:
+Find your local IP with `ipconfig` (Windows) / `ifconfig` (macOS/Linux) if testing on a
+physical device over the same network.
 
-```env
-EXPO_PUBLIC_BACKEND_URL="http://192.168.1.100:8001"
+Run with Expo Go (JS-only features):
+
+```bash
+npx expo start --tunnel
+```
+
+The native background-motion/offline-SOS pipeline only exists in the custom
+`android/` project, so to test it you need a development or EAS build rather than Expo Go:
+
+```bash
+npx expo run:android
+# or, for a distributable build:
+npx eas build -p android --profile preview
 ```
 
 ---
 
-## Quick Windows Commands
+## Deployment
 
-```bat
-:: Find local IP
-ipconfig
-
-:: Start MongoDB (if installed locally)
-mongod
-
-:: Start Backend
-cd backend
-venv\Scripts\activate
-uvicorn server:app --host 0.0.0.0 --port 8001 --reload
-
-:: Start Frontend
-cd frontend
-npx expo start --tunnel
-```
+- **Backend**: pushed as a container to AWS App Runner. Trigger a rebuild via CodeBuild,
+  then `aws apprunner start-deployment --service-arn <arn>`.
+- **Mobile app**: built via EAS (`eas.json` has `development`, `preview`, and `production`
+  profiles). Run `npx eas build -p android --profile preview` after backend-affecting or
+  native changes; check status with `npx eas build:list`.
 
 ---
 
 ## Notes
 
-* Keep phone screen **locked** to test background detection
-* Disable battery optimization for Expo Go
-* Ensure mobile and laptop are on the **same network**
-* This system is **rule-based and explainable**, ideal for safety-critical demos and hackathons
+- Offline SOS is designed to never claim a communication path exists when it doesn't — if
+  there's no cellular, Wi-Fi, or Bluetooth relay available, the event is persisted locally
+  and sent as soon as one becomes available.
+- Keep the phone screen locked and disable battery optimization for the app when testing
+  background motion detection.
+- `buildfailed.txt` / `next.md` in the repo root are working notes, not documentation.
 
 ---
 
-## Project Status
+## Team
 
-This project is **prototype-ready** and suitable for:
-
-* Hackathons
-* Academic submissions
-* MVP demonstrations
-* Safety-tech showcases
+- **Piyush** — Founder
+- **Mehak Sharma** — Co-founder
 
 ---
 
-**Nirbhay – Safety that doesn’t wait for permission.**
-
-```
-
+**Jāgriti – Safety that doesn't wait for permission.**

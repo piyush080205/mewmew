@@ -89,10 +89,25 @@ export default function AccountScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        <View style={styles.avatar}>
-          <Ionicons name="person" size={32} color={colors.primary} />
-        </View>
+        {user?.user_metadata?.avatar_url ? (
+          <Image source={{ uri: user.user_metadata.avatar_url as string }} style={styles.avatarImage} />
+        ) : (
+          <View style={styles.avatar}>
+            <Ionicons name="person" size={32} color={colors.primary} />
+          </View>
+        )}
+        {user?.user_metadata?.full_name ? (
+          <Text style={styles.name}>{user.user_metadata.full_name as string}</Text>
+        ) : null}
         <Text style={styles.email}>{user?.email}</Text>
+        {user?.user_metadata?.phone ? (
+          <Text style={styles.email}>{user.user_metadata.phone as string}</Text>
+        ) : null}
+
+        <TouchableOpacity style={styles.editButton} onPress={() => router.push('/auth/edit-profile')}>
+          <Ionicons name="create-outline" size={16} color={colors.primary} />
+          <Text style={styles.editButtonText}>Edit Profile</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
           <Text style={styles.signOutButtonText}>Sign Out</Text>
@@ -163,7 +178,14 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    avatarImage: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.surface },
+    name: { fontFamily: fonts.semiBold, fontSize: 17, color: colors.textPrimary },
     email: { fontFamily: fonts.medium, fontSize: 16, color: colors.textPrimary },
+    editButton: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      paddingVertical: 8, paddingHorizontal: 16,
+    },
+    editButtonText: { fontFamily: fonts.semiBold, fontSize: 14, color: colors.primary },
     signOutButton: {
       backgroundColor: colors.dangerTint,
       borderRadius: 12,
