@@ -15,6 +15,7 @@ from models import (
     GuardianUpdate,
     CellularTriangulationRequest,
     RiskEvent,
+    TripShareRequest,
     TripShareResponse,
     SharedTripView,
 )
@@ -113,23 +114,68 @@ async def update_guardian(trip_id: str, guardian: GuardianUpdate):
 
     return {"message": "Guardian updated", "trip_id": trip_id}
 
+def _parse_dt(value) -> Optional[datetime]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+
+
 @router.post("/trips/{trip_id}/share", response_model=TripShareResponse)
-async def share_trip(trip_id: str):
+async def share_trip(trip_id: str, body: TripShareRequest = TripShareRequest()):
     """
     Generate (or reuse) a public, unauthenticated share token for a trip, so
     the sender can send a guardian a link that shows live trip status/location
     without the guardian needing to install the app or log in.
+
+    Accepts an optional duration ("30 min / 1 hour / until I stop") and a
+    sharing_type ('manual' vs SOS-triggered 'emergency'), mirroring the
+    WhatsApp live-location share flow.
     """
     sb = await get_supabase()
     trip = await supabase_get_trip(trip_id)
 
-    existing_token = trip.get("share_token")
-    if existing_token:
-        return TripShareResponse(trip_id=trip_id, share_token=existing_token)
+    now = datetime.utcnow()
+    expires_at = now + timedelta(minutes=body.duration_minutes) if body.duration_minutes else None
 
-    token = secrets.token_urlsafe(16)
-    await sb.table("trips").update({"share_token": token}).eq("id", trip_id).execute()
-    return TripShareResponse(trip_id=trip_id, share_token=token)
+    existing_token = trip.get("share_token")
+    existing_expiry = _parse_dt(trip.get("share_expires_at"))
+    existing_still_valid = existing_expiry is None or existing_expiry > now
+    if existing_token and existing_still_valid and trip.get("sharing_type", "manual") == body.sharing_type:
+        return TripShareResponse(
+            trip_id=trip_id,
+            share_token=existing_token,
+            sharing_type=trip.get("sharing_type", "manual"),
+            share_expires_at=existing_expiry,
+        )
+
+    token = existing_token or secrets.token_urlsafe(16)
+    await sb.table("trips").update({
+        "share_token": token,
+        "sharing_type": body.sharing_type,
+        "share_started_at": now.isoformat(),
+        "share_expires_at": expires_at.isoformat() if expires_at else None,
+    }).eq("id", trip_id).execute()
+
+    return TripShareResponse(
+        trip_id=trip_id,
+        share_token=token,
+        sharing_type=body.sharing_type,
+        share_expires_at=expires_at,
+    )
+
+
+@router.post("/trips/{trip_id}/share/stop")
+async def stop_sharing(trip_id: str):
+    """Immediately invalidate the trip's share link, ahead of its expiry."""
+    sb = await get_supabase()
+    await supabase_get_trip(trip_id)  # 404s if the trip doesn't exist
+    await sb.table("trips").update({
+        "share_token": None,
+        "share_expires_at": None,
+    }).eq("id", trip_id).execute()
+    return {"message": "Sharing stopped", "trip_id": trip_id}
 
 
 @router.get("/trips/shared/{share_token}", response_model=SharedTripView)
@@ -143,6 +189,17 @@ async def get_shared_trip(share_token: str):
     if not result.data:
         raise HTTPException(status_code=404, detail="Shared trip not found")
     trip = result.data[0]
+
+    sharing_type = trip.get("sharing_type", "manual")
+    expires_at = _parse_dt(trip.get("share_expires_at"))
+    if expires_at and expires_at <= datetime.utcnow():
+        return SharedTripView(
+            status="expired",
+            ended=True,
+            last_location=None,
+            sharing_type=sharing_type,
+            share_expires_at=expires_at,
+        )
 
     last_locations = await _fetch_last_locations(sb, trip["id"], limit=1)
     last_location = None
@@ -158,6 +215,8 @@ async def get_shared_trip(share_token: str):
         status=trip.get("status", "unknown"),
         ended=trip.get("status") == "ended",
         last_location=last_location,
+        sharing_type=sharing_type,
+        share_expires_at=expires_at,
     )
 
 
@@ -178,6 +237,8 @@ async def add_location(trip_id: str, data: dict, background_tasks: BackgroundTas
         accuracy = data.get("accuracy", 0.0)
         source = data.get("source", "gps")
         accuracy_radius = data.get("accuracy_radius")
+        speed = data.get("speed")
+        battery = data.get("battery")
 
         if lat is None or lng is None:
             return {"error": "Missing lat/lng or latitude/longitude in request body"}
@@ -192,6 +253,8 @@ async def add_location(trip_id: str, data: dict, background_tasks: BackgroundTas
             "accuracy": float(accuracy),
             "source": source,
             "accuracy_radius": float(accuracy_radius) if accuracy_radius is not None else None,
+            "speed": float(speed) if speed is not None else None,
+            "battery": float(battery) if battery is not None else None,
         }).execute()
 
         # Trigger risk evaluation in background (only meaningful for active trips)

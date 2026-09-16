@@ -213,10 +213,18 @@ class CityDataResponse(BaseModel):
 # Trip Sharing Models
 # ===========================================
 
+class TripShareRequest(BaseModel):
+    """Optional body for POST /trips/{id}/share — duration + reason for the
+    share, mirroring WhatsApp's "share for 30 min / 1 hour / until I stop"."""
+    duration_minutes: Optional[int] = None  # None = until explicitly stopped
+    sharing_type: Literal["manual", "emergency"] = "manual"
+
 class TripShareResponse(BaseModel):
     """Token for a public, unauthenticated trip-viewer link."""
     trip_id: str
     share_token: str
+    sharing_type: str = "manual"
+    share_expires_at: Optional[datetime] = None
 
 class SharedTripView(BaseModel):
     """What a guardian sees at the public share link — no PII beyond what's
@@ -224,6 +232,8 @@ class SharedTripView(BaseModel):
     status: str
     ended: bool
     last_location: Optional[dict] = None  # {latitude, longitude, timestamp}
+    sharing_type: str = "manual"
+    share_expires_at: Optional[datetime] = None
 
 # ===========================================
 # Chat Safety Analysis Models

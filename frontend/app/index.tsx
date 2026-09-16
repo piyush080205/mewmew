@@ -123,9 +123,14 @@ export default function HomeScreen() {
   const [showSafetyCheck, setShowSafetyCheck] = useState(false);
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [countdownSeconds, setCountdownSeconds] = useState(15);
+  const [activeShareToken, setActiveShareToken] = useState<string | null>(null);
 
   // Refs for tracking subscriptions
   const locationSubscription = useRef<any>(null);
+  // Live-updated (not stale-closure) flag the GPS callback reads to pick the
+  // high-frequency 'sos' interval bucket the instant a panic/SOS state starts,
+  // without needing to resubscribe watchPositionAsync just to pick that up.
+  const sosActiveRef = useRef(false);
 
   // Load saved guardian on mount
   useEffect(() => {
@@ -201,6 +206,10 @@ export default function HomeScreen() {
       requestNativePermissions();
     }
   }, []);
+
+  useEffect(() => {
+    sosActiveRef.current = showSafetyCheck || motionStatus === 'panic_detected';
+  }, [showSafetyCheck, motionStatus]);
 
   const requestNativePermissions = async () => {
     if (isWeb) {
@@ -278,6 +287,93 @@ export default function HomeScreen() {
     }
   };
 
+  type SpeedBucket = 'sos' | 'fast' | 'moderate' | 'slow';
+
+  const bucketForSpeed = (speedMps: number | null | undefined, sosActive: boolean): SpeedBucket => {
+    if (sosActive) return 'sos';
+    if (speedMps == null || speedMps < 0) return 'moderate';
+    if (speedMps > 8) return 'fast'; // vehicle-speed
+    if (speedMps < 0.5) return 'slow'; // stationary
+    return 'moderate'; // walking
+  };
+
+  const locationOptionsFor = (bucket: SpeedBucket, ExpoLocation: any) => {
+    switch (bucket) {
+      case 'sos':
+        return { accuracy: ExpoLocation.Accuracy.BestForNavigation, timeInterval: 2000, distanceInterval: 0 };
+      case 'fast':
+        return { accuracy: ExpoLocation.Accuracy.High, timeInterval: 5000, distanceInterval: 10 };
+      case 'slow':
+        return { accuracy: ExpoLocation.Accuracy.High, timeInterval: 20000, distanceInterval: 25 };
+      case 'moderate':
+      default:
+        return { accuracy: ExpoLocation.Accuracy.High, timeInterval: 10000, distanceInterval: 15 };
+    }
+  };
+
+  // Subscribes to GPS updates at a given bucket's cadence, and re-subscribes
+  // itself at a different cadence whenever the observed speed (or an active
+  // SOS) implies a different bucket — so tracking tightens automatically in
+  // a vehicle or during an emergency, and relaxes while stationary, instead
+  // of polling every device at the same fixed interval regardless of context.
+  const subscribeAdaptiveLocation = async (
+    ExpoLocation: any,
+    ExpoBattery: any,
+    tripId: string,
+    bucket: SpeedBucket
+  ): Promise<any> => {
+    const options = locationOptionsFor(bucket, ExpoLocation);
+    const sub = await ExpoLocation.watchPositionAsync(options, async (location: any) => {
+      const { latitude, longitude, accuracy: gpsAccuracy, speed } = location.coords;
+      const source = gpsAccuracy && gpsAccuracy > 100 ? 'cellular_unwiredlabs' : 'gps';
+
+      setTrackingSource(source);
+      setAccuracy(gpsAccuracy || 0);
+
+      addLocation({
+        latitude,
+        longitude,
+        accuracy: gpsAccuracy || 0,
+        source,
+        timestamp: new Date().toISOString(),
+      });
+
+      let battery: number | null = null;
+      if (ExpoBattery) {
+        try {
+          battery = Math.round((await ExpoBattery.getBatteryLevelAsync()) * 100);
+        } catch {
+          battery = null;
+        }
+      }
+
+      try {
+        await sendLocation(tripId, {
+          latitude,
+          longitude,
+          accuracy: gpsAccuracy || 0,
+          source,
+          speed: typeof speed === 'number' && speed >= 0 ? speed : null,
+          battery,
+        });
+      } catch (err) {
+        console.error('Failed to send location:', err);
+      }
+
+      const desiredBucket = bucketForSpeed(speed, sosActiveRef.current);
+      if (desiredBucket !== bucket) {
+        sub.remove();
+        locationSubscription.current = await subscribeAdaptiveLocation(
+          ExpoLocation,
+          ExpoBattery,
+          tripId,
+          desiredBucket
+        );
+      }
+    });
+    return sub;
+  };
+
   // Start location tracking
   const startLocationTracking = async (tripId: string) => {
     if (isWeb) {
@@ -311,40 +407,22 @@ export default function HomeScreen() {
 
     try {
       const ExpoLocation = await import('expo-location');
+      let ExpoBattery: any = null;
+      try {
+        ExpoBattery = await import('expo-battery');
+      } catch {
+        // Battery reporting is a nice-to-have for the guardian view; skip if unavailable.
+      }
 
-      // Try GPS first
-      locationSubscription.current = await ExpoLocation.watchPositionAsync(
-        {
-          accuracy: ExpoLocation.Accuracy.High,
-          timeInterval: 5000,
-          distanceInterval: 10,
-        },
-        async (location: any) => {
-          const { latitude, longitude, accuracy: gpsAccuracy } = location.coords;
-          const source = gpsAccuracy && gpsAccuracy > 100 ? 'cellular_unwiredlabs' : 'gps';
-
-          setTrackingSource(source);
-          setAccuracy(gpsAccuracy || 0);
-
-          addLocation({
-            latitude,
-            longitude,
-            accuracy: gpsAccuracy || 0,
-            source,
-            timestamp: new Date().toISOString(),
-          });
-
-          try {
-            await sendLocation(tripId, {
-              latitude,
-              longitude,
-              accuracy: gpsAccuracy || 0,
-              source,
-            });
-          } catch (err) {
-            console.error('Failed to send location:', err);
-          }
-        }
+      // Try GPS first, with an adaptive update rate: tight (2s) during an
+      // active SOS/panic state, looser while stationary, moderate/fast
+      // otherwise based on observed speed — instead of a flat interval
+      // regardless of motion or emergency state.
+      locationSubscription.current = await subscribeAdaptiveLocation(
+        ExpoLocation,
+        ExpoBattery,
+        tripId,
+        'moderate'
       );
     } catch (error) {
       console.error('GPS location tracking error:', error);
@@ -505,6 +583,7 @@ export default function HomeScreen() {
       });
 
       endTrip();
+      setActiveShareToken(null);
       Alert.alert('Trip Ended', 'Safety tracking has been stopped.');
     } catch (error) {
       console.error('Failed to end trip:', error);
@@ -583,22 +662,47 @@ export default function HomeScreen() {
   // via SMS/WhatsApp/etc. No login required for whoever opens it — see
   // backend/routers/trips.py: POST .../share, GET /api/trips/shared/{token}
   // and frontend/app/shared/[token].tsx.
-  const handleShareTrip = async () => {
+  const startShare = async (durationMinutes: number | null) => {
     if (!currentTrip) return;
     try {
-      const res = await fetch(`${API_URL}/api/trips/${currentTrip.id}/share`, { method: 'POST' });
+      const res = await fetch(`${API_URL}/api/trips/${currentTrip.id}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ duration_minutes: durationMinutes, sharing_type: 'manual' }),
+      });
       if (!res.ok) throw new Error('Failed to create share link');
       const { share_token } = await res.json();
+      setActiveShareToken(share_token);
       // Assumes the Expo web build is hosted at the same origin as API_URL;
       // point this at the actual web deployment URL if that's not the case.
       const link = `${API_URL}/shared/${share_token}`;
       await Share.share({
-        message: `Track my trip live: ${link}`,
+        message: `Track my live location: ${link}`,
         url: link,
       });
     } catch (err) {
       console.error('Failed to share trip:', err);
       Alert.alert('Error', 'Could not create a share link. Please try again.');
+    }
+  };
+
+  const handleShareTrip = () => {
+    Alert.alert('Share live location', 'How long should your guardian be able to see your location?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: '30 minutes', onPress: () => startShare(30) },
+      { text: '1 hour', onPress: () => startShare(60) },
+      { text: 'Until I stop', onPress: () => startShare(null) },
+    ]);
+  };
+
+  const handleStopSharing = async () => {
+    if (!currentTrip) return;
+    try {
+      await fetch(`${API_URL}/api/trips/${currentTrip.id}/share/stop`, { method: 'POST' });
+    } catch (err) {
+      console.error('Failed to stop sharing:', err);
+    } finally {
+      setActiveShareToken(null);
     }
   };
 
@@ -808,10 +912,17 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {isTracking && currentTrip && (
+        {isTracking && currentTrip && !activeShareToken && (
           <TouchableOpacity style={styles.setGuardianButton} onPress={handleShareTrip}>
             <Ionicons name="share-social" size={20} color={colors.primary} />
-            <Text style={styles.setGuardianText}>Share Trip with Guardian</Text>
+            <Text style={styles.setGuardianText}>Share Live Location</Text>
+          </TouchableOpacity>
+        )}
+
+        {isTracking && currentTrip && activeShareToken && (
+          <TouchableOpacity style={[styles.setGuardianButton, styles.stopSharingButton]} onPress={handleStopSharing}>
+            <Ionicons name="radio" size={20} color={colors.success} />
+            <Text style={styles.setGuardianText}>Sharing live location — tap to stop</Text>
           </TouchableOpacity>
         )}
 
@@ -1100,6 +1211,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.primary,
     borderStyle: 'dashed',
+  },
+  stopSharingButton: {
+    backgroundColor: colors.successTint,
+    borderColor: colors.success,
+    borderStyle: 'solid',
   },
   setGuardianText: {
     color: colors.primary,

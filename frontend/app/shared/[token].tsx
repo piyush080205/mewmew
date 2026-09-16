@@ -21,6 +21,8 @@ interface SharedTripView {
   status: string;
   ended: boolean;
   last_location: { latitude: number; longitude: number; timestamp: string } | null;
+  sharing_type: string;
+  share_expires_at: string | null;
 }
 
 const POLL_INTERVAL_MS = 15000;
@@ -108,18 +110,39 @@ export default function SharedTripScreen() {
 
       {!loading && !error && view && (
         <>
-          <View style={[styles.statusBanner, { borderColor: view.ended ? colors.textMuted : colors.success }]}>
+          {view.sharing_type === 'emergency' && view.status !== 'expired' && (
+            <View style={styles.emergencyBadge}>
+              <Ionicons name="warning" size={16} color={colors.white} />
+              <Text style={styles.emergencyBadgeText}>Emergency — SOS triggered</Text>
+            </View>
+          )}
+
+          <View
+            style={[
+              styles.statusBanner,
+              { borderColor: view.status === 'expired' ? colors.textMuted : view.ended ? colors.textMuted : colors.success },
+            ]}
+          >
             <Text style={styles.statusText}>
-              {view.ended ? 'Trip has ended' : 'Trip is active'}
+              {view.status === 'expired'
+                ? 'This share has ended'
+                : view.ended
+                ? 'Trip has ended'
+                : 'Trip is active'}
             </Text>
-            {view.last_location && (
+            {view.last_location && view.status !== 'expired' && (
               <Text style={styles.statusSub}>
                 Last updated: {new Date(view.last_location.timestamp).toLocaleTimeString()}
               </Text>
             )}
+            {view.share_expires_at && view.status !== 'expired' && (
+              <Text style={styles.statusSub}>
+                Sharing until: {new Date(view.share_expires_at).toLocaleTimeString()}
+              </Text>
+            )}
           </View>
 
-          {view.last_location ? (
+          {view.status === 'expired' ? null : view.last_location ? (
             <View style={styles.mapContainer}>
               <WebView source={{ html: mapHtml() }} style={styles.map} />
             </View>
@@ -142,6 +165,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   title: { fontSize: 17, fontFamily: fonts.bold, color: colors.textPrimary },
   centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 10 },
+  emergencyBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginHorizontal: 16, marginTop: 12, paddingVertical: 8, paddingHorizontal: 12,
+    borderRadius: 8, backgroundColor: colors.danger, alignSelf: 'flex-start',
+  },
+  emergencyBadgeText: { color: colors.white, fontFamily: fonts.semiBold, fontSize: 12 },
   errorText: { color: colors.textSecondary, fontSize: 14, textAlign: 'center' },
   statusBanner: {
     margin: 16, padding: 14, borderRadius: 12, borderWidth: 2,

@@ -19,7 +19,7 @@ from models import (
     SosEventOut,
     SosEventStatusUpdate,
 )
-from risk_engine import send_sms_alert
+from risk_engine import send_sms_alert, _ensure_emergency_share
 from supabase_client import get_supabase
 from utils import build_sos_alert_message
 
@@ -94,6 +94,12 @@ async def _server_side_alert_for_sos(sb, event_row: dict) -> None:
     never raised, since the client's own persisted record is authoritative.
     """
     try:
+        trip_id = event_row.get("trip_id")
+        if trip_id:
+            trip_result = await sb.table("trips").select("*").eq("id", trip_id).execute()
+            if trip_result.data:
+                await _ensure_emergency_share(sb, trip_result.data[0])
+
         contacts = await _get_contacts_for_alert(sb, event_row.get("user_id") or "default_user")
         if not contacts:
             return

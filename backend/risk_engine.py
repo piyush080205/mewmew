@@ -2,6 +2,7 @@
 recent location/motion history, plus alert dispatch (push + SMS).
 """
 import asyncio
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -238,12 +239,37 @@ async def send_push_notification(fcm_token: str, title: str, body: str) -> bool:
     return True
 
 
+async def _ensure_emergency_share(sb, trip: dict) -> None:
+    """
+    Auto-start (or keep) an emergency-mode share link when a risk alert
+    fires, so the guardian has a live-tracking link the moment SOS triggers
+    rather than needing the sender to manually tap Share. Reuses the existing
+    share_token machinery (see routers/trips.py: share_trip) with
+    sharing_type='emergency' and no expiry.
+    """
+    try:
+        if trip.get("share_token") and trip.get("sharing_type") == "emergency":
+            return  # Already sharing in emergency mode
+        token = trip.get("share_token") or secrets.token_urlsafe(16)
+        await sb.table("trips").update({
+            "share_token": token,
+            "sharing_type": "emergency",
+            "share_started_at": datetime.utcnow().isoformat(),
+            "share_expires_at": None,
+        }).eq("id", trip["id"]).execute()
+    except Exception as e:
+        logger.error(f"Failed to auto-start emergency share for trip {trip.get('id')}: {e}")
+
+
 async def trigger_alerts(trip: dict, risk_event: RiskEvent) -> dict:
     """
     Trigger both push notification and SMS alert.
     Push is primary, SMS is mandatory fallback.
     """
     results = {"push_sent": False, "sms_sent": False}
+
+    sb = await get_supabase()
+    await _ensure_emergency_share(sb, trip)
 
     guardian_phone = trip.get('guardian_phone')
     guardian_fcm_token = trip.get('guardian_fcm_token')

@@ -44,7 +44,14 @@ export async function sendMotion(
  */
 export async function sendLocation(
   tripId: string,
-  coords: { latitude: number; longitude: number; accuracy?: number; source?: string }
+  coords: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    source?: string;
+    speed?: number | null;
+    battery?: number | null;
+  }
 ): Promise<void> {
   console.log('Sending location:', coords);
   try {
@@ -56,6 +63,8 @@ export async function sendLocation(
         lng: coords.longitude,
         accuracy: coords.accuracy ?? 0,
         source: coords.source ?? 'gps',
+        speed: coords.speed ?? undefined,
+        battery: coords.battery ?? undefined,
       }),
     });
     if (!res.ok) {
