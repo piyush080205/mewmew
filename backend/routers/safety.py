@@ -213,6 +213,16 @@ async def reverse_geocode_city(lat: float, lng: float) -> Optional[str]:
         return None
 
 
+# A metro/commissionerate area's curated data should still apply to its
+# surrounding blocks and townships (e.g. Matigara, Bagdogra, Naxalbari are
+# all within the Siliguri dataset's coverage but Nominatim reverse-geocodes
+# them to their own town/block name, not "Siliguri"). Rather than requiring
+# an exact city_name match, fall back to the nearest curated city within this
+# radius. Sized to comfortably cover the outermost curated Siliguri-area
+# station (Kharibari PS, ~29km from the Siliguri center point).
+CURATED_CITY_FALLBACK_RADIUS_M = 40_000
+
+
 @router.get("/safety/city-data", response_model=CityDataResponse)
 async def get_city_safety_data(lat: float, lng: float):
     """
@@ -236,6 +246,27 @@ async def get_city_safety_data(lat: float, lng: float):
         )
         if result.data:
             row = result.data[0]
+
+    # Name match failed (e.g. reverse geocoding returned a sub-locality like
+    # "Matigara" instead of "Siliguri") -- try the nearest curated city by
+    # straight-line distance before giving up to DEFAULT.
+    if row is None:
+        nearby_result = await (
+            sb.table("city_safety_data")
+            .select("*")
+            .not_.is_("center_lat", "null")
+            .not_.is_("center_lng", "null")
+            .neq("city_name", "DEFAULT")
+            .execute()
+        )
+        best_row, best_dist = None, float("inf")
+        for candidate in nearby_result.data or []:
+            dist = calculate_distance(lat, lng, candidate["center_lat"], candidate["center_lng"])
+            if dist < best_dist:
+                best_row, best_dist = candidate, dist
+        if best_row is not None and best_dist <= CURATED_CITY_FALLBACK_RADIUS_M:
+            row = best_row
+            city_name = city_name or best_row["city_name"]
 
     matched = row is not None
     if row is None:
