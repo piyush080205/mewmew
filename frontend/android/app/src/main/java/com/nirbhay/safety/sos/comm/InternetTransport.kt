@@ -29,6 +29,8 @@ class InternetTransport(private val context: Context) {
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
+    data class SyncResult(val success: Boolean, val shareLink: String? = null)
+
     fun hasValidatedNetwork(): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
         val network = cm.activeNetwork ?: return false
@@ -37,10 +39,16 @@ class InternetTransport(private val context: Context) {
             caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
-    /** Returns true if the backend accepted (and thus this event can be marked SERVER_SYNCED). */
-    fun sync(event: SosEventEntity): Boolean {
+    /**
+     * Syncs the event to the backend. On success also returns the live-share
+     * link the backend minted for this event's trip (POST /api/sos/sync's
+     * `share_links[client_event_id]`), if any — the caller uses it to send a
+     * follow-up SMS over the same free, on-device channel, since this app
+     * doesn't require a paid SMS gateway to deliver the live link.
+     */
+    fun sync(event: SosEventEntity): SyncResult {
         val apiUrl = SosPrefs.getApiUrl(context)
-        if (apiUrl.isNullOrBlank() || !hasValidatedNetwork()) return false
+        if (apiUrl.isNullOrBlank() || !hasValidatedNetwork()) return SyncResult(success = false)
 
         return try {
             val body = JSONObject().put("events", JSONArray().put(toPayload(event)))
@@ -52,9 +60,14 @@ class InternetTransport(private val context: Context) {
                 .post(body)
                 .build()
 
-            client.newCall(request).execute().use { response -> response.isSuccessful }
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return SyncResult(success = false)
+                val json = JSONObject(response.body?.string().orEmpty())
+                val shareLink = json.optJSONObject("share_links")?.optString(event.id)?.takeIf { it.isNotBlank() }
+                SyncResult(success = true, shareLink = shareLink)
+            }
         } catch (e: Exception) {
-            false
+            SyncResult(success = false)
         }
     }
 

@@ -45,10 +45,17 @@ class CommunicationManager(private val context: Context) {
 
         var synced = false
         if (internetTransport.hasValidatedNetwork()) {
-            synced = internetTransport.sync(current)
+            val syncResult = internetTransport.sync(current)
+            synced = syncResult.success
             if (synced) {
                 repo.updateStatus(current.id, SosEventStatus.SERVER_SYNCED)
                 current = repo.getById(current.id) ?: current
+            }
+            // Free, on-device follow-up carrying the live-tracking link —
+            // the backend only returns one once it's actually online to mint
+            // it, so this can't be part of the immediate offline-first SMS.
+            if (syncResult.shareLink != null && phoneNumbers.isNotEmpty()) {
+                SmsSender.send(context, phoneNumbers, "JĀGRITI: Track my live location: ${syncResult.shareLink}")
             }
         }
 

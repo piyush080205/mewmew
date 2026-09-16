@@ -7,7 +7,7 @@ motion-detection service (or a manual trigger), synced here once a
 communication path (internet) becomes available.
 """
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
 
@@ -107,15 +107,22 @@ async def _get_contacts_for_alert(sb, user_id: str) -> List[dict]:
     )
     return result.data
 
-async def _server_side_alert_for_sos(sb, event_row: dict) -> None:
+async def _server_side_alert_for_sos(sb, event_row: dict) -> Optional[str]:
     """
-    Redundant server-side delivery attempt for a synced SOS event, covering
-    the case where the client's own on-device SMS attempt silently failed
-    (no SIM credit, carrier block, etc). Best-effort — failures are logged,
-    never raised, since the client's own persisted record is authoritative.
+    Ensures an emergency share link exists for the event's trip, and makes a
+    best-effort redundant SMS delivery attempt via Fast2SMS (a paid gateway
+    the app doesn't require — covers the case where the client's own
+    on-device SMS silently failed, e.g. no SIM credit). Failures here are
+    logged, never raised: the client's own persisted record is authoritative,
+    and the free on-device SMS (SmsTransport.kt) is the primary channel.
+
+    Returns the share link (or None), so the caller can hand it back to the
+    client in the /sos/sync response — the app then sends its own follow-up
+    SMS with the link via the same free, on-device channel, no Fast2SMS
+    balance required.
     """
+    share_link = None
     try:
-        share_link = None
         trip_id = event_row.get("trip_id")
         if trip_id:
             trip_result = await sb.table("trips").select("*").eq("id", trip_id).execute()
@@ -123,24 +130,24 @@ async def _server_side_alert_for_sos(sb, event_row: dict) -> None:
                 share_link = await _ensure_emergency_share(sb, trip_result.data[0])
 
         contacts = await _get_contacts_for_alert(sb, event_row.get("user_id") or "default_user")
-        if not contacts:
-            return
-        lat = event_row.get("latitude")
-        lon = event_row.get("longitude")
-        location = {"latitude": lat, "longitude": lon} if lat is not None and lon is not None else None
-        # Location is embedded in the message itself (maps link, or explicit
-        # "unavailable") rather than passed separately, so it can never be
-        # silently dropped when a fix is missing or stale.
-        message = build_sos_alert_message(
-            event_row.get("trigger_reason", "Emergency detected"),
-            location,
-            location_is_fresh=bool(event_row.get("location_is_fresh", True)),
-            share_link=share_link,
-        )
-        for contact in contacts:
-            await send_sms_alert(contact["phone_number"], message, None)
+        if contacts:
+            lat = event_row.get("latitude")
+            lon = event_row.get("longitude")
+            location = {"latitude": lat, "longitude": lon} if lat is not None and lon is not None else None
+            # Location is embedded in the message itself (maps link, or explicit
+            # "unavailable") rather than passed separately, so it can never be
+            # silently dropped when a fix is missing or stale.
+            message = build_sos_alert_message(
+                event_row.get("trigger_reason", "Emergency detected"),
+                location,
+                location_is_fresh=bool(event_row.get("location_is_fresh", True)),
+                share_link=share_link,
+            )
+            for contact in contacts:
+                await send_sms_alert(contact["phone_number"], message, None)
     except Exception as e:
         logger.error(f"Server-side SOS alert failed for event {event_row.get('id')}: {e}")
+    return share_link
 
 @router.post("/sos/sync")
 async def sync_sos_events(payload: SosEventSyncRequest):
@@ -151,6 +158,7 @@ async def sync_sos_events(payload: SosEventSyncRequest):
     """
     sb = await get_supabase()
     synced_ids = []
+    share_links: dict[str, str] = {}
 
     for event in payload.events:
         row = event.model_dump()
@@ -181,12 +189,25 @@ async def sync_sos_events(payload: SosEventSyncRequest):
 
         # Only fire the redundant server-side alert the first time we see
         # this event synced (and it's a real emergency, not a cancelled one).
-        if is_new and not event.cancelled:
-            await _server_side_alert_for_sos(sb, saved)
+        # Either way, resolve the share link so the client can fire its own
+        # free, on-device follow-up SMS with it — a retry (e.g. the app
+        # crashed before seeing the first response) shouldn't skip that.
+        share_link = None
+        if not event.cancelled:
+            if is_new:
+                share_link = await _server_side_alert_for_sos(sb, saved)
+            else:
+                trip_id = saved.get("trip_id")
+                if trip_id:
+                    trip_result = await sb.table("trips").select("*").eq("id", trip_id).execute()
+                    if trip_result.data:
+                        share_link = await _ensure_emergency_share(sb, trip_result.data[0])
+            if share_link:
+                share_links[event.client_event_id] = share_link
 
         synced_ids.append(saved.get("id", event.client_event_id))
 
-    return {"synced_ids": synced_ids, "status": "SERVER_SYNCED"}
+    return {"synced_ids": synced_ids, "status": "SERVER_SYNCED", "share_links": share_links}
 
 @router.get("/sos/events", response_model=List[SosEventOut])
 async def list_sos_events(user_id: str = "default_user"):
