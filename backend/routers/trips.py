@@ -1,7 +1,7 @@
 """Trip lifecycle, location/motion ingestion, and risk-evaluation endpoints."""
 import asyncio
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Header
@@ -136,7 +136,7 @@ async def share_trip(trip_id: str, body: TripShareRequest = TripShareRequest()):
     sb = await get_supabase()
     trip = await supabase_get_trip(trip_id)
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expires_at = now + timedelta(minutes=body.duration_minutes) if body.duration_minutes else None
 
     existing_token = trip.get("share_token")
@@ -192,7 +192,7 @@ async def get_shared_trip(share_token: str):
 
     sharing_type = trip.get("sharing_type", "manual")
     expires_at = _parse_dt(trip.get("share_expires_at"))
-    if expires_at and expires_at <= datetime.utcnow():
+    if expires_at and expires_at <= datetime.now(timezone.utc):
         return SharedTripView(
             status="expired",
             ended=True,
