@@ -27,6 +27,22 @@ interface SharedTripView {
 
 const POLL_INTERVAL_MS = 15000;
 
+/** Formats a timestamp as IST regardless of the viewer's own timezone —
+ * the trip itself is in India, so "last updated" should read in local
+ * Indian time for every guardian, not their device's timezone. Backend
+ * timestamps without a timezone suffix (e.g. bare location_events.created_at)
+ * are UTC on the wire, so treat a suffix-less string as UTC before formatting. */
+function formatIST(iso: string): string {
+  const hasOffset = /Z$|[+-]\d{2}:?\d{2}$/.test(iso);
+  const date = new Date(hasOffset ? iso : `${iso}Z`);
+  return `${date.toLocaleTimeString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })} IST`;
+}
+
 export default function SharedTripScreen() {
   const { token } = useLocalSearchParams<{ token: string }>();
   const { colors, theme } = useTheme();
@@ -132,12 +148,12 @@ export default function SharedTripScreen() {
             </Text>
             {view.last_location && view.status !== 'expired' && (
               <Text style={styles.statusSub}>
-                Last updated: {new Date(view.last_location.timestamp).toLocaleTimeString()}
+                Last updated: {formatIST(view.last_location.timestamp)}
               </Text>
             )}
             {view.share_expires_at && view.status !== 'expired' && (
               <Text style={styles.statusSub}>
-                Sharing until: {new Date(view.share_expires_at).toLocaleTimeString()}
+                Sharing until: {formatIST(view.share_expires_at)}
               </Text>
             )}
           </View>

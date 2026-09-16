@@ -24,19 +24,32 @@ def is_night_time(timestamp: datetime) -> bool:
     hour = timestamp.hour
     return hour >= NIGHT_START_HOUR or hour < NIGHT_END_HOUR
 
-def build_sos_alert_message(reason: str, location: dict | None, location_is_fresh: bool = True) -> str:
+def build_sos_alert_message(
+    reason: str,
+    location: dict | None,
+    location_is_fresh: bool = True,
+    share_link: str | None = None,
+) -> str:
     """Build an SOS SMS/push message that always states location explicitly
     in the text itself — either a maps link (flagged "(last known)" if
     stale) or the literal "Location: unavailable" — instead of silently
     omitting location when it's missing. Mirrors the on-device message
-    format built by frontend/android/.../sos/comm/SmsTransport.kt.
+    format built by frontend/android/.../sos/comm/SmsTransport.kt (which
+    has no `share_link`, since that path is offline-only).
+
+    `share_link`, when given, is a live-tracking link (backend's
+    /shared/{token} page) appended as a second line, so the guardian can
+    watch the person move rather than see only the single fix at alert time.
     """
     if location and location.get("latitude") is not None and location.get("longitude") is not None:
         freshness = "" if location_is_fresh else " (last known)"
         loc_str = f"https://maps.google.com/?q={location['latitude']},{location['longitude']}{freshness}"
     else:
         loc_str = "unavailable"
-    return f"JAGRITI SOS: {reason}. Please check on me now.\nLocation: {loc_str}"
+    message = f"JAGRITI SOS: {reason}. Please check on me now.\nLocation: {loc_str}"
+    if share_link:
+        message += f"\nTrack live: {share_link}"
+    return message
 
 
 def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

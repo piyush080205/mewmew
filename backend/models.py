@@ -89,6 +89,15 @@ class GuardianUpdate(BaseModel):
 # Emergency Contacts / SOS Event Models
 # ===========================================
 
+class UserSettingsIn(BaseModel):
+    """Account-level preferences. sos_share_minutes controls how long an
+    auto-started emergency live-location share stays active after SOS
+    triggers; None means "until manually stopped" (the historical default)."""
+    sos_share_minutes: Optional[int] = None
+
+class UserSettingsOut(UserSettingsIn):
+    user_id: str = "default_user"
+
 class EmergencyContactIn(BaseModel):
     """Contact create/update payload"""
     user_id: str = "default_user"

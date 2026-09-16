@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 
 from fastapi import FastAPI, APIRouter
+from fastapi.responses import FileResponse
 from starlette.middleware.cors import CORSMiddleware
 import httpx
 
@@ -67,6 +68,14 @@ async def health_check():
 
 # Include the router in the main app
 app.include_router(api_router)
+
+# Standalone HTML/JS guardian view for a live-sharing link — no Expo/React
+# Native involved (that requires an authenticated app session and native
+# modules that don't run outside it), just a page that polls the public
+# /api/trips/shared/{token} JSON endpoint. See static/shared/index.html.
+@app.get("/shared/{token}")
+async def shared_trip_page(token: str):
+    return FileResponse("static/shared/index.html")
 
 app.add_middleware(
     CORSMiddleware,

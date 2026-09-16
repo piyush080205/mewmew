@@ -3,11 +3,11 @@ recent location/motion history, plus alert dispatch (push + SMS).
 """
 import asyncio
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import shared
-from config import FAST2SMS_API_KEY
+from config import FAST2SMS_API_KEY, PUBLIC_BASE_URL
 from models import RiskEvent
 from utils import now_ist, is_night_time, calculate_distance, build_sos_alert_message
 from db_helpers import (
@@ -239,26 +239,47 @@ async def send_push_notification(fcm_token: str, title: str, body: str) -> bool:
     return True
 
 
-async def _ensure_emergency_share(sb, trip: dict) -> None:
+async def _get_sos_share_minutes(sb) -> Optional[int]:
+    """User-configured emergency-share duration (Account settings). None
+    means "share until manually stopped", the historical default."""
+    try:
+        result = await (
+            sb.table("user_settings").select("sos_share_minutes").eq("user_id", "default_user").execute()
+        )
+        return result.data[0]["sos_share_minutes"] if result.data else None
+    except Exception as e:
+        logger.error(f"Failed to read sos_share_minutes setting: {e}")
+        return None
+
+
+async def _ensure_emergency_share(sb, trip: dict) -> Optional[str]:
     """
     Auto-start (or keep) an emergency-mode share link when a risk alert
     fires, so the guardian has a live-tracking link the moment SOS triggers
     rather than needing the sender to manually tap Share. Reuses the existing
     share_token machinery (see routers/trips.py: share_trip) with
-    sharing_type='emergency' and no expiry.
+    sharing_type='emergency', for the user's configured duration (or no
+    expiry if unset). Returns the share link, or None on failure.
     """
     try:
         if trip.get("share_token") and trip.get("sharing_type") == "emergency":
-            return  # Already sharing in emergency mode
+            return f"{PUBLIC_BASE_URL}/shared/{trip['share_token']}"
+
         token = trip.get("share_token") or secrets.token_urlsafe(16)
+        share_minutes = await _get_sos_share_minutes(sb)
+        expires_at = (
+            datetime.now(timezone.utc) + timedelta(minutes=share_minutes) if share_minutes else None
+        )
         await sb.table("trips").update({
             "share_token": token,
             "sharing_type": "emergency",
-            "share_started_at": datetime.utcnow().isoformat(),
-            "share_expires_at": None,
+            "share_started_at": datetime.now(timezone.utc).isoformat(),
+            "share_expires_at": expires_at.isoformat() if expires_at else None,
         }).eq("id", trip["id"]).execute()
+        return f"{PUBLIC_BASE_URL}/shared/{token}"
     except Exception as e:
         logger.error(f"Failed to auto-start emergency share for trip {trip.get('id')}: {e}")
+        return None
 
 
 async def trigger_alerts(trip: dict, risk_event: RiskEvent) -> dict:
@@ -269,7 +290,7 @@ async def trigger_alerts(trip: dict, risk_event: RiskEvent) -> dict:
     results = {"push_sent": False, "sms_sent": False}
 
     sb = await get_supabase()
-    await _ensure_emergency_share(sb, trip)
+    share_link = await _ensure_emergency_share(sb, trip)
 
     guardian_phone = trip.get('guardian_phone')
     guardian_fcm_token = trip.get('guardian_fcm_token')
@@ -283,7 +304,9 @@ async def trigger_alerts(trip: dict, risk_event: RiskEvent) -> dict:
     # Location is embedded in the string itself (via build_sos_alert_message)
     # rather than appended separately, so a missing/stale fix never silently
     # drops off the message — it always says either a maps link or "unavailable".
-    sms_message = build_sos_alert_message(risk_event.rule_name, risk_event.last_known_location)
+    sms_message = build_sos_alert_message(
+        risk_event.rule_name, risk_event.last_known_location, share_link=share_link
+    )
 
     # Try push notification first (primary)
     if guardian_fcm_token:

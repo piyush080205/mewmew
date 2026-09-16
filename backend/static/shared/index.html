@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Jāgriti — Live Trip</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, Roboto, Helvetica, Arial, sans-serif; background: #F7F7FA; color: #1A1A2E; display: flex; flex-direction: column; height: 100vh; }
+  header { display: flex; align-items: center; gap: 8px; padding: 16px; border-bottom: 1px solid #E5E5EA; background: #fff; }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  .center-box { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 10px; text-align: center; color: #6B6B7B; }
+  .spinner { width: 32px; height: 32px; border: 3px solid #DDD; border-top-color: #4B4BE0; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .emergency-badge { display: flex; align-items: center; gap: 6px; margin: 12px 16px 0; padding: 8px 12px; border-radius: 8px; background: #E0303D; color: #fff; font-weight: 600; font-size: 12px; width: fit-content; }
+  .status-banner { margin: 16px; padding: 14px; border-radius: 12px; border: 2px solid #34C759; background: #fff; }
+  .status-banner.ended, .status-banner.expired { border-color: #B0B0BC; }
+  .status-text { font-size: 16px; font-weight: 600; margin: 0; }
+  .status-sub { font-size: 12px; color: #9797A6; margin: 4px 0 0; }
+  #map { flex: 1; margin: 0 16px 16px; border-radius: 16px; overflow: hidden; }
+  .error-text { font-size: 14px; }
+</style>
+</head>
+<body>
+  <header>
+    <span>🛡️</span>
+    <h1>Jāgriti — Live Trip</h1>
+  </header>
+  <div id="content">
+    <div class="center-box"><div class="spinner"></div></div>
+  </div>
+
+<script>
+const POLL_INTERVAL_MS = 15000;
+const token = window.location.pathname.split('/').filter(Boolean).pop();
+const content = document.getElementById('content');
+let map = null;
+let marker = null;
+
+function formatIST(iso) {
+  const hasOffset = /Z$|[+-]\d{2}:?\d{2}$/.test(iso);
+  const date = new Date(hasOffset ? iso : iso + 'Z');
+  return date.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true }) + ' IST';
+}
+
+function renderError(message) {
+  map = null;
+  content.innerHTML = `<div class="center-box"><span style="font-size:32px">⚠️</span><p class="error-text">${message}</p></div>`;
+}
+
+function renderView(view) {
+  const ended = view.ended;
+  const expired = view.status === 'expired';
+  const bannerClass = expired ? 'expired' : ended ? 'ended' : '';
+  const statusLabel = expired ? 'This share has ended' : ended ? 'Trip has ended' : 'Trip is active';
+
+  let html = '';
+  if (view.sharing_type === 'emergency' && !expired) {
+    html += `<div class="emergency-badge">⚠️ Emergency — SOS triggered</div>`;
+  }
+  html += `<div class="status-banner ${bannerClass}">
+    <p class="status-text">${statusLabel}</p>`;
+  if (view.last_location && !expired) {
+    html += `<p class="status-sub">Last updated: ${formatIST(view.last_location.timestamp)}</p>`;
+  }
+  if (view.share_expires_at && !expired) {
+    html += `<p class="status-sub">Sharing until: ${formatIST(view.share_expires_at)}</p>`;
+  }
+  html += `</div>`;
+
+  if (expired) {
+    content.innerHTML = html;
+    map = null;
+  } else if (view.last_location) {
+    content.innerHTML = html + `<div id="map"></div>`;
+    const { latitude, longitude } = view.last_location;
+    if (!map) {
+      map = L.map('map').setView([latitude, longitude], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap',
+      }).addTo(map);
+      marker = L.marker([latitude, longitude]).addTo(map).bindPopup('Last known location').openPopup();
+    } else {
+      map.setView([latitude, longitude]);
+      marker.setLatLng([latitude, longitude]);
+    }
+  } else {
+    content.innerHTML = html + `<div class="center-box"><p class="error-text">No location shared yet.</p></div>`;
+    map = null;
+  }
+}
+
+async function fetchView() {
+  if (!token) {
+    renderError('Invalid share link.');
+    return;
+  }
+  try {
+    const res = await fetch(`/api/trips/shared/${token}`);
+    if (!res.ok) {
+      renderError(res.status === 404 ? 'This share link is invalid or has expired.' : 'Could not load trip status.');
+      return;
+    }
+    renderView(await res.json());
+  } catch (e) {
+    renderError('Could not reach the server. Check your connection.');
+  }
+}
+
+fetchView();
+setInterval(fetchView, POLL_INTERVAL_MS);
+</script>
+</body>
+</html>

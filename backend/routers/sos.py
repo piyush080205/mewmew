@@ -18,6 +18,8 @@ from models import (
     SosEventSyncRequest,
     SosEventOut,
     SosEventStatusUpdate,
+    UserSettingsIn,
+    UserSettingsOut,
 )
 from risk_engine import send_sms_alert, _ensure_emergency_share
 from supabase_client import get_supabase
@@ -26,6 +28,25 @@ from utils import build_sos_alert_message
 logger = shared.logger
 
 router = APIRouter()
+
+# ===========================================
+# Account Settings
+# ===========================================
+
+@router.get("/settings", response_model=UserSettingsOut)
+async def get_settings(user_id: str = "default_user"):
+    sb = await get_supabase()
+    result = await sb.table("user_settings").select("*").eq("user_id", user_id).execute()
+    if result.data:
+        return result.data[0]
+    return UserSettingsOut(user_id=user_id)
+
+@router.put("/settings", response_model=UserSettingsOut)
+async def update_settings(settings: UserSettingsIn, user_id: str = "default_user"):
+    sb = await get_supabase()
+    row = {"user_id": user_id, **settings.model_dump()}
+    await sb.table("user_settings").upsert(row).execute()
+    return UserSettingsOut(**row)
 
 # ===========================================
 # Emergency Contacts (list-based, supersedes the 3 flat
@@ -94,11 +115,12 @@ async def _server_side_alert_for_sos(sb, event_row: dict) -> None:
     never raised, since the client's own persisted record is authoritative.
     """
     try:
+        share_link = None
         trip_id = event_row.get("trip_id")
         if trip_id:
             trip_result = await sb.table("trips").select("*").eq("id", trip_id).execute()
             if trip_result.data:
-                await _ensure_emergency_share(sb, trip_result.data[0])
+                share_link = await _ensure_emergency_share(sb, trip_result.data[0])
 
         contacts = await _get_contacts_for_alert(sb, event_row.get("user_id") or "default_user")
         if not contacts:
@@ -113,6 +135,7 @@ async def _server_side_alert_for_sos(sb, event_row: dict) -> None:
             event_row.get("trigger_reason", "Emergency detected"),
             location,
             location_is_fresh=bool(event_row.get("location_is_fresh", True)),
+            share_link=share_link,
         )
         for contact in contacts:
             await send_sms_alert(contact["phone_number"], message, None)
