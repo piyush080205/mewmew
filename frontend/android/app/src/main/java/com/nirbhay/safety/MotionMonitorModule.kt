@@ -60,20 +60,28 @@ class MotionMonitorModule(reactContext: ReactApplicationContext) : ReactContextB
 
     @ReactMethod
     fun triggerManualSos(reason: String, promise: Promise) {
-        val tripId = SosPrefs.getTripId(reactApplicationContext)
-        SosTriggerCoordinator.trigger(
-            context = reactApplicationContext,
-            tripId = tripId,
-            latitude = null,
-            longitude = null,
-            accuracyMeters = null,
-            locationIsFresh = false,
-            locationTimestamp = null,
-            batteryPercent = null,
-            confidence = 1.0,
-            triggerReason = reason,
-            contributingSignals = listOf("MANUAL")
-        )
+        val running = MotionForegroundService.runningInstance
+        if (running != null) {
+            // Goes through the foreground service so the event carries a real
+            // location/battery reading instead of nulls — see its own
+            // triggerManualSos for the fetch logic this delegates to.
+            running.triggerManualSos(reason)
+        } else {
+            val tripId = SosPrefs.getTripId(reactApplicationContext)
+            SosTriggerCoordinator.trigger(
+                context = reactApplicationContext,
+                tripId = tripId,
+                latitude = null,
+                longitude = null,
+                accuracyMeters = null,
+                locationIsFresh = false,
+                locationTimestamp = null,
+                batteryPercent = null,
+                confidence = 1.0,
+                triggerReason = reason,
+                contributingSignals = listOf("MANUAL")
+            )
+        }
         promise.resolve(true)
     }
 

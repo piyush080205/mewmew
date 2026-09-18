@@ -35,6 +35,7 @@ import { API_URL, sendLocation, addEmergencyContact } from '../services/api';
 import { fonts, ThemeColors } from '../constants/theme';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { requestSmsPermission } from '../utils/nativeSms';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -227,6 +228,15 @@ export default function HomeScreen() {
           await ExpoLocation.requestBackgroundPermissionsAsync();
         } catch (e) {
           console.log('Background permission not available');
+        }
+        // Without this, the native SOS pipeline's SmsSender silently drops
+        // every SMS (SEND_SMS is a dangerous permission never granted at
+        // install time) and the "SOS Triggered" alert fires having sent
+        // nothing — request it up front, same as location.
+        try {
+          await requestSmsPermission();
+        } catch (e) {
+          console.log('SMS permission not available');
         }
       } else {
         Alert.alert(
