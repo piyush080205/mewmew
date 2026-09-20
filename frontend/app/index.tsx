@@ -21,6 +21,7 @@ import { router } from 'expo-router';
 import { useTripStore } from '../store/tripStore';
 import MapView from '../components/MapView';
 import SafetyCheckModal from '../components/SafetyCheckModal';
+import StreakWidget from '../components/StreakWidget';
 import {
   startBackgroundTracking,
   stopBackgroundTracking,
@@ -32,6 +33,7 @@ import {
   seedEmergencyContacts,
 } from '../services/BackgroundMotionService';
 import { API_URL, sendLocation, addEmergencyContact } from '../services/api';
+import { getTodaysTip, SafetyTip } from '../services/retentionApi';
 import { fonts, ThemeColors } from '../constants/theme';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -124,6 +126,7 @@ export default function HomeScreen() {
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [countdownSeconds, setCountdownSeconds] = useState(15);
   const [activeShareToken, setActiveShareToken] = useState<string | null>(null);
+  const [dailyTip, setDailyTip] = useState<SafetyTip | null>(null);
 
   // Refs for tracking subscriptions
   const locationSubscription = useRef<any>(null);
@@ -138,6 +141,8 @@ export default function HomeScreen() {
       const { loadSavedGuardian } = useTripStore.getState();
       await loadSavedGuardian();
       await migrateGuardianPhonesToEmergencyContacts();
+      const tip = await getTodaysTip();
+      if (tip) setDailyTip(tip);
     };
     loadData();
   }, []);
@@ -749,6 +754,9 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {/* Daily Check-in Streak Widget */}
+        <StreakWidget />
+
         <View style={styles.statusCard}>
           <View style={styles.statusRow}>
             <View style={styles.statusItem}>
@@ -960,7 +968,21 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* New Features Section */}
+        {/* Daily Tip Card */}
+        {dailyTip && (
+          <TouchableOpacity style={styles.tipCard} onPress={() => router.push('/tips')}>
+            <View style={styles.tipIconWrap}>
+              <Ionicons name="bulb" size={20} color={colors.amber} />
+            </View>
+            <View style={styles.tipContent}>
+              <Text style={styles.tipLabel}>Tip of the Day</Text>
+              <Text style={styles.tipText} numberOfLines={2}>{dailyTip.content}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
+
+        {/* Safety Tools */}
         <View style={styles.featuresSection}>
           <Text style={styles.featuresSectionTitle}>Safety Tools</Text>
           <View style={styles.featuresGrid}>
@@ -978,6 +1000,42 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.featureTitle}>Chat Safety</Text>
               <Text style={styles.featureDesc}>Analyze suspicious chats</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={[styles.featuresGrid, { marginTop: 12 }]}>
+            <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/dashboard')}>
+              <View style={[styles.featureIconContainer, { backgroundColor: colors.successTint }]}>
+                <Ionicons name="stats-chart" size={28} color={colors.success} />
+              </View>
+              <Text style={styles.featureTitle}>Dashboard</Text>
+              <Text style={styles.featureDesc}>Your safety journey</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/badges')}>
+              <View style={[styles.featureIconContainer, { backgroundColor: colors.purpleTint }]}>
+                <Ionicons name="ribbon" size={28} color={colors.purple} />
+              </View>
+              <Text style={styles.featureTitle}>Badges</Text>
+              <Text style={styles.featureDesc}>Earn achievements</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={[styles.featuresGrid, { marginTop: 12 }]}>
+            <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/community')}>
+              <View style={[styles.featureIconContainer, { backgroundColor: colors.orangeTint }]}>
+                <Ionicons name="megaphone" size={28} color={colors.orange} />
+              </View>
+              <Text style={styles.featureTitle}>Community</Text>
+              <Text style={styles.featureDesc}>Report unsafe areas</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/tips')}>
+              <View style={[styles.featureIconContainer, { backgroundColor: colors.amberTint }]}>
+                <Ionicons name="bulb" size={28} color={colors.amber} />
+              </View>
+              <Text style={styles.featureTitle}>Safety Tips</Text>
+              <Text style={styles.featureDesc}>Daily safety advice</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1267,6 +1325,40 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 12,
     opacity: 0.9,
+  },
+  tipCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.amberTint,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    gap: 12,
+    borderColor: colors.amberBorder,
+    borderWidth: 1,
+  },
+  tipIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.amber + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tipContent: {
+    flex: 1,
+  },
+  tipLabel: {
+    fontSize: 11,
+    fontFamily: fonts.semiBold,
+    color: colors.amber,
+    marginBottom: 2,
+  },
+  tipText: {
+    fontSize: 13,
+    fontFamily: fonts.regular,
+    color: colors.textSecondary,
+    lineHeight: 18,
   },
   featuresSection: {
     marginBottom: 16,
