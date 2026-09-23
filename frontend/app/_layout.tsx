@@ -42,6 +42,10 @@ function RootStack() {
         <Stack.Screen name="auth/login" />
         <Stack.Screen name="auth/signup" />
         <Stack.Screen name="auth/account" />
+        <Stack.Screen name="dashboard" />
+        <Stack.Screen name="badges" />
+        <Stack.Screen name="community" />
+        <Stack.Screen name="tips" />
       </Stack>
     </SafeAreaProvider>
   );
