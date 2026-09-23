@@ -11,6 +11,7 @@ import { API_URL } from '../../services/api';
 const FOUNDERS = [
   { name: 'Mehak Sharma', role: 'Co-Founder', photo: require('../../assets/founders/mehak-sharma.jpg') },
   { name: 'Piyush Kumar Singh', role: 'Co-Founder', photo: require('../../assets/founders/piyush-kumar-singh.jpg') },
+  { name: 'Aniket Kumar', role: 'Mentor', photo: require('../../assets/founders/aniket-kumar.jpg') },
 ];
 
 // null = share until manually stopped
@@ -147,7 +148,7 @@ export default function AccountScreen() {
         </View>
 
         <View style={styles.foundersSection}>
-          <Text style={styles.foundersTitle}>Founders</Text>
+          <Text style={styles.foundersTitle}>Founders & Mentor</Text>
           <View style={styles.foundersRow}>
             {FOUNDERS.map((f) => (
               <View key={f.name} style={styles.founderCard}>

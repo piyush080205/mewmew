@@ -13,7 +13,6 @@ import {
   AppState,
   AppStateStatus,
   Share,
-  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -1023,19 +1022,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Mentor */}
-        <View style={styles.mentorCard}>
-          <Image
-            source={require('../assets/founders/aniket-kumar.jpg')}
-            style={styles.mentorImage}
-          />
-          <View style={styles.mentorInfo}>
-            <Text style={styles.mentorLabel}>Mentor</Text>
-            <Text style={styles.mentorName}>Aniket Kumar</Text>
-            <Text style={styles.mentorRole}>Guiding safety & empowerment</Text>
-          </View>
-        </View>
-
         {/* Motivational Quote */}
         <View style={styles.quoteCard}>
           <Ionicons name="sparkles" size={18} color={colors.primary} />
@@ -1470,44 +1456,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: fonts.regular,
     color: colors.textSecondary,
     lineHeight: 18,
-  },
-  mentorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: 16,
-    gap: 14,
-    borderColor: colors.border,
-    borderWidth: 1,
-    marginBottom: 16,
-  },
-  mentorImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-  },
-  mentorInfo: {
-    flex: 1,
-  },
-  mentorLabel: {
-    fontSize: 11,
-    fontFamily: fonts.semiBold,
-    color: colors.primary,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  mentorName: {
-    fontSize: 16,
-    fontFamily: fonts.bold,
-    color: colors.textPrimary,
-    marginBottom: 2,
-  },
-  mentorRole: {
-    fontSize: 13,
-    fontFamily: fonts.regular,
-    color: colors.textSecondary,
   },
   quoteCard: {
     flexDirection: 'row',
