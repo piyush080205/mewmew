@@ -11,7 +11,7 @@ import { API_URL } from '../../services/api';
 const FOUNDERS = [
   { name: 'Mehak Sharma', role: 'Co-Founder', photo: require('../../assets/founders/mehak-sharma.jpg') },
   { name: 'Piyush Kumar Singh', role: 'Co-Founder', photo: require('../../assets/founders/piyush-kumar-singh.jpg') },
-  { name: 'Aniket Kumar', role: 'Mentor', photo: require('../../assets/founders/aniket-kumar.jpg') },
+  { name: 'Aniket Prasad', role: 'Mentor', photo: require('../../assets/founders/aniket-kumar.jpg') },
 ];
 
 // null = share until manually stopped
