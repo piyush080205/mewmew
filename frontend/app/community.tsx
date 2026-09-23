@@ -24,12 +24,12 @@ import {
 } from '../services/retentionApi';
 
 const REPORT_TYPES = [
-  { value: 'unsafe_area', label: 'Unsafe Area', icon: 'warning', color: '#D96570' },
-  { value: 'poor_lighting', label: 'Poor Lighting', icon: 'flashlight', color: '#D9A544' },
-  { value: 'harassment', label: 'Harassment', icon: 'alert-circle', color: '#D96570' },
-  { value: 'suspicious_activity', label: 'Suspicious Activity', icon: 'eye', color: '#D97757' },
-  { value: 'road_issue', label: 'Road Issue', icon: 'construct', color: '#7C6FD9' },
-  { value: 'other', label: 'Other', icon: 'ellipsis-horizontal', color: '#8A8DA3' },
+  { value: 'unsafe_area', label: 'Unsafe Area', icon: 'warning', color: '#D96570', bg: '#FBEAEC' },
+  { value: 'poor_lighting', label: 'Poor Lighting', icon: 'flashlight', color: '#D9A544', bg: '#FBF2E2' },
+  { value: 'harassment', label: 'Harassment', icon: 'alert-circle', color: '#D96570', bg: '#FBEAEC' },
+  { value: 'suspicious_activity', label: 'Suspicious', icon: 'eye', color: '#D97757', bg: '#FBEAE2' },
+  { value: 'road_issue', label: 'Road Issue', icon: 'construct', color: '#7C6FD9', bg: '#EEEBFB' },
+  { value: 'other', label: 'Other', icon: 'ellipsis-horizontal', color: '#8A8DA3', bg: '#EAEAF4' },
 ];
 
 const SEVERITY_OPTIONS = [
@@ -39,16 +39,17 @@ const SEVERITY_OPTIONS = [
   { value: 'critical', label: 'Critical', color: '#B82E3B' },
 ];
 
+const MAX_DESC = 500;
+
 export default function CommunityScreen() {
   const { colors } = useTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [reports, setReports] = useState<CommunityReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'report' | 'nearby'>('report');
 
-  // Form state
   const [reportType, setReportType] = useState('unsafe_area');
   const [severity, setSeverity] = useState('medium');
   const [description, setDescription] = useState('');
@@ -99,8 +100,8 @@ export default function CommunityScreen() {
     setSubmitting(false);
     if (result) {
       Alert.alert('Report Submitted', 'Thank you for helping keep the community safe!');
-      setShowForm(false);
       setDescription('');
+      setActiveTab('nearby');
       loadReports();
     } else {
       Alert.alert('Error', 'Failed to submit report. Please try again.');
@@ -135,58 +136,82 @@ export default function CommunityScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadReports(); }} />}
       >
+        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>Community Reports</Text>
-          <TouchableOpacity onPress={() => setShowForm(!showForm)} style={styles.addButton}>
-            <Ionicons name={showForm ? 'close' : 'add'} size={24} color={colors.primary} />
-          </TouchableOpacity>
+          <View style={{ width: 40 }} />
         </View>
 
         <Text style={styles.subtitle}>
           Help keep your community safe by reporting unsafe areas and incidents
         </Text>
 
-        {showForm && (
-          <View style={styles.formCard}>
-            <Text style={styles.formTitle}>New Report</Text>
+        {/* Tabs */}
+        <View style={styles.tabRow}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'report' && styles.tabActive]}
+            onPress={() => setActiveTab('report')}
+          >
+            <Text style={[styles.tabText, activeTab === 'report' && styles.tabTextActive]}>New Report</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'nearby' && styles.tabActive]}
+            onPress={() => setActiveTab('nearby')}
+          >
+            <Text style={[styles.tabText, activeTab === 'nearby' && styles.tabTextActive]}>Nearby</Text>
+          </TouchableOpacity>
+        </View>
 
-            <Text style={styles.formLabel}>Type</Text>
+        {activeTab === 'report' ? (
+          <View style={styles.formCard}>
+            {/* Step 1: Type */}
+            <View style={styles.stepRow}>
+              <View style={styles.stepBadge}><Text style={styles.stepNumber}>1</Text></View>
+              <Text style={styles.stepLabel}>Type of Report</Text>
+            </View>
             <View style={styles.typeGrid}>
               {REPORT_TYPES.map((t) => (
                 <TouchableOpacity
                   key={t.value}
                   style={[
-                    styles.typeChip,
-                    reportType === t.value && { backgroundColor: t.color + '20', borderColor: t.color },
+                    styles.typeCard,
+                    reportType === t.value && { borderColor: t.color, borderWidth: 2 },
                   ]}
                   onPress={() => setReportType(t.value)}
                 >
-                  <Ionicons name={t.icon as any} size={16} color={reportType === t.value ? t.color : colors.textSecondary} />
-                  <Text
-                    style={[styles.typeChipText, reportType === t.value && { color: t.color }]}
-                  >
+                  <View style={[styles.typeIconWrap, { backgroundColor: t.bg }]}>
+                    <Ionicons name={t.icon as any} size={22} color={t.color} />
+                  </View>
+                  <Text style={[styles.typeLabel, reportType === t.value && { color: t.color, fontFamily: fonts.semiBold }]}>
                     {t.label}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <Text style={styles.formLabel}>Severity</Text>
+            {/* Step 2: Severity */}
+            <View style={styles.stepRow}>
+              <View style={styles.stepBadge}><Text style={styles.stepNumber}>2</Text></View>
+              <Text style={styles.stepLabel}>Severity Level</Text>
+            </View>
             <View style={styles.severityRow}>
               {SEVERITY_OPTIONS.map((s) => (
                 <TouchableOpacity
                   key={s.value}
                   style={[
-                    styles.severityChip,
-                    severity === s.value && { backgroundColor: s.color + '20', borderColor: s.color },
+                    styles.severityPill,
+                    severity === s.value && { backgroundColor: s.color, borderColor: s.color },
                   ]}
                   onPress={() => setSeverity(s.value)}
                 >
                   <Text
-                    style={[styles.severityText, severity === s.value && { color: s.color }]}
+                    style={[
+                      styles.severityText,
+                      severity === s.value && { color: '#FFFFFF' },
+                    ]}
                   >
                     {s.label}
                   </Text>
@@ -194,17 +219,41 @@ export default function CommunityScreen() {
               ))}
             </View>
 
-            <Text style={styles.formLabel}>Description (optional)</Text>
-            <TextInput
-              style={styles.descInput}
-              placeholder="What happened or what should people watch out for?"
-              placeholderTextColor={colors.textPlaceholder}
-              multiline
-              numberOfLines={3}
-              value={description}
-              onChangeText={setDescription}
-            />
+            {/* Step 3: Description */}
+            <View style={styles.stepRow}>
+              <View style={styles.stepBadge}><Text style={styles.stepNumber}>3</Text></View>
+              <Text style={styles.stepLabel}>Description</Text>
+            </View>
+            <View style={styles.descWrap}>
+              <TextInput
+                style={styles.descInput}
+                placeholder="What happened or what should people watch out for?"
+                placeholderTextColor={colors.textPlaceholder}
+                multiline
+                numberOfLines={4}
+                maxLength={MAX_DESC}
+                value={description}
+                onChangeText={setDescription}
+              />
+              <Text style={styles.charCount}>{description.length}/{MAX_DESC}</Text>
+            </View>
 
+            {/* Photo Upload */}
+            <View style={styles.photoSection}>
+              <Text style={styles.photoLabel}>Add Photo (optional)</Text>
+              <View style={styles.photoButtons}>
+                <TouchableOpacity style={styles.photoButton} onPress={() => Alert.alert('Coming Soon', 'Camera feature will be available soon.')}>
+                  <Ionicons name="camera" size={20} color={colors.primary} />
+                  <Text style={styles.photoButtonText}>Take Photo</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.photoButton} onPress={() => Alert.alert('Coming Soon', 'Gallery feature will be available soon.')}>
+                  <Ionicons name="images" size={20} color={colors.primary} />
+                  <Text style={styles.photoButtonText}>Choose from Gallery</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Submit */}
             <TouchableOpacity
               style={styles.submitButton}
               onPress={handleSubmit}
@@ -216,51 +265,61 @@ export default function CommunityScreen() {
                 <Text style={styles.submitText}>Submit Report</Text>
               )}
             </TouchableOpacity>
-          </View>
-        )}
 
-        {loading ? (
-          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
-        ) : reports.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="megaphone-outline" size={48} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>No reports nearby</Text>
-            <Text style={styles.emptyText}>Be the first to report — tap + above</Text>
+            {/* Privacy Note */}
+            <View style={styles.privacyNote}>
+              <Ionicons name="shield-checkmark" size={14} color={colors.textMuted} />
+              <Text style={styles.privacyText}>
+                Your report is anonymous. Your identity will not be shared.
+              </Text>
+            </View>
           </View>
         ) : (
-          reports.map((report) => {
-            const typeInfo = getTypeInfo(report.report_type);
-            return (
-              <View key={report.id} style={styles.reportCard}>
-                <View style={styles.reportHeader}>
-                  <View style={[styles.reportIcon, { backgroundColor: typeInfo.color + '18' }]}>
-                    <Ionicons name={typeInfo.icon as any} size={20} color={typeInfo.color} />
-                  </View>
-                  <View style={styles.reportInfo}>
-                    <Text style={styles.reportType}>{typeInfo.label}</Text>
-                    <Text style={styles.reportTime}>{timeAgo(report.created_at)}</Text>
-                  </View>
-                  <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(report.severity) + '20' }]}>
-                    <Text style={[styles.severityBadgeText, { color: getSeverityColor(report.severity) }]}>
-                      {report.severity}
-                    </Text>
-                  </View>
-                </View>
-                {report.description && (
-                  <Text style={styles.reportDesc}>{report.description}</Text>
-                )}
-                <View style={styles.reportFooter}>
-                  <TouchableOpacity
-                    style={styles.upvoteButton}
-                    onPress={() => handleUpvote(report.id)}
-                  >
-                    <Ionicons name="arrow-up" size={16} color={colors.primary} />
-                    <Text style={styles.upvoteCount}>{report.upvotes}</Text>
-                  </TouchableOpacity>
-                </View>
+          <>
+            {loading ? (
+              <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+            ) : reports.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="megaphone-outline" size={48} color={colors.textMuted} />
+                <Text style={styles.emptyTitle}>No reports nearby</Text>
+                <Text style={styles.emptyText}>Be the first to report — switch to New Report tab</Text>
               </View>
-            );
-          })
+            ) : (
+              reports.map((report) => {
+                const typeInfo = getTypeInfo(report.report_type);
+                return (
+                  <View key={report.id} style={styles.reportCard}>
+                    <View style={styles.reportHeader}>
+                      <View style={[styles.reportIcon, { backgroundColor: typeInfo.bg }]}>
+                        <Ionicons name={typeInfo.icon as any} size={20} color={typeInfo.color} />
+                      </View>
+                      <View style={styles.reportInfo}>
+                        <Text style={styles.reportType}>{typeInfo.label}</Text>
+                        <Text style={styles.reportTime}>{timeAgo(report.created_at)}</Text>
+                      </View>
+                      <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(report.severity) + '20' }]}>
+                        <Text style={[styles.severityBadgeText, { color: getSeverityColor(report.severity) }]}>
+                          {report.severity}
+                        </Text>
+                      </View>
+                    </View>
+                    {report.description && (
+                      <Text style={styles.reportDesc}>{report.description}</Text>
+                    )}
+                    <View style={styles.reportFooter}>
+                      <TouchableOpacity
+                        style={styles.upvoteButton}
+                        onPress={() => handleUpvote(report.id)}
+                      >
+                        <Ionicons name="arrow-up" size={16} color={colors.primary} />
+                        <Text style={styles.upvoteCount}>{report.upvotes}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -289,97 +348,193 @@ const createStyles = (colors: ThemeColors) =>
     },
     backButton: { padding: 8 },
     title: { fontSize: 20, fontFamily: fonts.bold, color: colors.textPrimary },
-    addButton: { padding: 8 },
     subtitle: {
       fontSize: 13,
       fontFamily: fonts.regular,
       color: colors.textSecondary,
+      marginBottom: 16,
+    },
+    tabRow: {
+      flexDirection: 'row',
+      backgroundColor: colors.backgroundAlt,
+      borderRadius: 12,
+      padding: 4,
       marginBottom: 20,
+    },
+    tab: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: 10,
+      alignItems: 'center',
+    },
+    tabActive: {
+      backgroundColor: colors.surface,
+    },
+    tabText: {
+      fontSize: 14,
+      fontFamily: fonts.medium,
+      color: colors.textSecondary,
+    },
+    tabTextActive: {
+      color: colors.textPrimary,
+      fontFamily: fonts.semiBold,
     },
     formCard: {
       backgroundColor: colors.surface,
       borderRadius: 16,
       padding: 20,
-      marginBottom: 20,
       borderColor: colors.border,
       borderWidth: 1,
     },
-    formTitle: {
-      fontSize: 16,
+    stepRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 14,
+    },
+    stepBadge: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    stepNumber: {
+      color: colors.white,
+      fontSize: 13,
+      fontFamily: fonts.bold,
+    },
+    stepLabel: {
+      fontSize: 15,
       fontFamily: fonts.semiBold,
       color: colors.textPrimary,
-      marginBottom: 16,
-    },
-    formLabel: {
-      fontSize: 13,
-      fontFamily: fonts.medium,
-      color: colors.textSecondary,
-      marginBottom: 8,
     },
     typeGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 8,
-      marginBottom: 16,
+      gap: 10,
+      marginBottom: 24,
     },
-    typeChip: {
-      flexDirection: 'row',
+    typeCard: {
+      width: '30%' as any,
+      flexGrow: 1,
       alignItems: 'center',
-      gap: 6,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 10,
+      backgroundColor: colors.background,
+      borderRadius: 14,
+      paddingVertical: 16,
+      paddingHorizontal: 8,
       borderWidth: 1,
       borderColor: colors.border,
-      backgroundColor: colors.backgroundAlt,
     },
-    typeChipText: {
+    typeIconWrap: {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 8,
+    },
+    typeLabel: {
       fontSize: 12,
       fontFamily: fonts.medium,
       color: colors.textSecondary,
+      textAlign: 'center',
     },
     severityRow: {
       flexDirection: 'row',
       gap: 8,
-      marginBottom: 16,
+      marginBottom: 24,
     },
-    severityChip: {
+    severityPill: {
       flex: 1,
       alignItems: 'center',
-      paddingVertical: 8,
-      borderRadius: 10,
+      paddingVertical: 10,
+      borderRadius: 20,
       borderWidth: 1,
       borderColor: colors.border,
-      backgroundColor: colors.backgroundAlt,
+      backgroundColor: colors.background,
     },
     severityText: {
-      fontSize: 12,
+      fontSize: 13,
       fontFamily: fonts.medium,
       color: colors.textSecondary,
     },
+    descWrap: {
+      marginBottom: 20,
+    },
     descInput: {
-      backgroundColor: colors.backgroundAlt,
+      backgroundColor: colors.background,
       borderRadius: 12,
       padding: 14,
       color: colors.textPrimary,
       fontFamily: fonts.regular,
       fontSize: 14,
-      marginBottom: 16,
       borderColor: colors.border,
       borderWidth: 1,
-      minHeight: 80,
+      minHeight: 100,
       textAlignVertical: 'top',
+    },
+    charCount: {
+      fontSize: 11,
+      fontFamily: fonts.regular,
+      color: colors.textMuted,
+      textAlign: 'right',
+      marginTop: 6,
+    },
+    photoSection: {
+      marginBottom: 20,
+    },
+    photoLabel: {
+      fontSize: 13,
+      fontFamily: fonts.medium,
+      color: colors.textSecondary,
+      marginBottom: 10,
+    },
+    photoButtons: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    photoButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      borderStyle: 'dashed',
+      backgroundColor: colors.primaryTint,
+    },
+    photoButtonText: {
+      fontSize: 12,
+      fontFamily: fonts.medium,
+      color: colors.primary,
     },
     submitButton: {
       backgroundColor: colors.primary,
-      borderRadius: 12,
-      padding: 14,
+      borderRadius: 14,
+      padding: 16,
       alignItems: 'center',
+      marginBottom: 12,
     },
     submitText: {
       color: colors.white,
-      fontSize: 15,
+      fontSize: 16,
       fontFamily: fonts.semiBold,
+    },
+    privacyNote: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+    },
+    privacyText: {
+      fontSize: 11,
+      fontFamily: fonts.regular,
+      color: colors.textMuted,
     },
     emptyState: {
       alignItems: 'center',
@@ -412,7 +567,7 @@ const createStyles = (colors: ThemeColors) =>
     reportIcon: {
       width: 40,
       height: 40,
-      borderRadius: 20,
+      borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -428,13 +583,13 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.textMuted,
     },
     severityBadge: {
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 12,
     },
     severityBadgeText: {
       fontSize: 11,
-      fontFamily: fonts.medium,
+      fontFamily: fonts.semiBold,
       textTransform: 'capitalize',
     },
     reportDesc: {
