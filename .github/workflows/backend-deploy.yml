@@ -1,0 +1,64 @@
+name: Backend Deploy (AWS App Runner)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-deploy.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: backend-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: nirbhay-backend
+  APPRUNNER_SERVICE: nirbhay-backend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -v
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        working-directory: backend
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
+        run: |
+          docker build -t "$IMAGE:latest" -t "$IMAGE:${GITHUB_SHA}" .
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:${GITHUB_SHA}"
+
+      # The service has AutoDeploymentsEnabled=false, so trigger the rollout explicitly.
+      - name: Deploy to App Runner
+        run: |
+          ARN=$(aws apprunner list-services \
+            --query "ServiceSummaryList[?ServiceName=='${APPRUNNER_SERVICE}'].ServiceArn | [0]" \
+            --output text)
+          aws apprunner start-deployment --service-arn "$ARN"
