@@ -7,7 +7,7 @@ motion-detection service (or a manual trigger), synced here once a
 communication path (internet) becomes available.
 """
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
 
@@ -21,7 +21,9 @@ from models import (
     UserSettingsIn,
     UserSettingsOut,
 )
-from risk_engine import send_sms_alert, _ensure_emergency_share
+from alerts import send_sms_alert
+from db_helpers import fetch_emergency_contacts
+from sharing import ensure_emergency_share
 from supabase_client import get_supabase
 from utils import build_sos_alert_message
 
@@ -56,14 +58,7 @@ async def update_settings(settings: UserSettingsIn, user_id: str = "default_user
 @router.get("/emergency-contacts", response_model=List[EmergencyContactOut])
 async def list_emergency_contacts(user_id: str = "default_user"):
     sb = await get_supabase()
-    result = await (
-        sb.table("emergency_contacts")
-        .select("*")
-        .eq("user_id", user_id)
-        .order("priority")
-        .execute()
-    )
-    return result.data
+    return await fetch_emergency_contacts(sb, user_id)
 
 @router.post("/emergency-contacts", response_model=EmergencyContactOut)
 async def create_emergency_contact(contact: EmergencyContactIn):
@@ -97,15 +92,16 @@ async def delete_emergency_contact(contact_id: str):
 # Offline-First SOS Events
 # ===========================================
 
-async def _get_contacts_for_alert(sb, user_id: str) -> List[dict]:
-    result = await (
-        sb.table("emergency_contacts")
-        .select("*")
-        .eq("user_id", user_id)
-        .order("priority")
-        .execute()
-    )
-    return result.data
+async def _share_link_for_trip(sb, trip_id: Optional[str]) -> Optional[str]:
+    """Emergency live-share link for the trip (started if needed), or None
+    when the event has no trip or the trip can't be found."""
+    if not trip_id:
+        return None
+    trip_result = await sb.table("trips").select("*").eq("id", trip_id).execute()
+    if not trip_result.data:
+        return None
+    return await ensure_emergency_share(sb, trip_result.data[0])
+
 
 async def _server_side_alert_for_sos(sb, event_row: dict) -> Optional[str]:
     """
@@ -123,13 +119,9 @@ async def _server_side_alert_for_sos(sb, event_row: dict) -> Optional[str]:
     """
     share_link = None
     try:
-        trip_id = event_row.get("trip_id")
-        if trip_id:
-            trip_result = await sb.table("trips").select("*").eq("id", trip_id).execute()
-            if trip_result.data:
-                share_link = await _ensure_emergency_share(sb, trip_result.data[0])
+        share_link = await _share_link_for_trip(sb, event_row.get("trip_id"))
 
-        contacts = await _get_contacts_for_alert(sb, event_row.get("user_id") or "default_user")
+        contacts = await fetch_emergency_contacts(sb, event_row.get("user_id") or "default_user")
         if contacts:
             lat = event_row.get("latitude")
             lon = event_row.get("longitude")
@@ -144,10 +136,39 @@ async def _server_side_alert_for_sos(sb, event_row: dict) -> Optional[str]:
                 share_link=share_link,
             )
             for contact in contacts:
-                await send_sms_alert(contact["phone_number"], message, None)
+                await send_sms_alert(contact["phone_number"], message)
     except Exception as e:
         logger.error(f"Server-side SOS alert failed for event {event_row.get('id')}: {e}")
     return share_link
+
+async def _upsert_sos_event(sb, event) -> Tuple[dict, bool]:
+    """Insert the event, or update it if its client_event_id was synced
+    before. Returns (saved_row, is_new)."""
+    row = event.model_dump()
+    for key, value in row.items():
+        if isinstance(value, datetime):
+            row[key] = value.isoformat()
+    row["synced_at"] = datetime.utcnow().isoformat()
+
+    existing = await (
+        sb.table("sos_events")
+        .select("id,status")
+        .eq("client_event_id", event.client_event_id)
+        .execute()
+    )
+
+    is_new = not existing.data
+    if is_new:
+        result = await sb.table("sos_events").insert(row).execute()
+    else:
+        result = await (
+            sb.table("sos_events")
+            .update(row)
+            .eq("client_event_id", event.client_event_id)
+            .execute()
+        )
+    return (result.data[0] if result.data else row), is_new
+
 
 @router.post("/sos/sync")
 async def sync_sos_events(payload: SosEventSyncRequest):
@@ -161,31 +182,7 @@ async def sync_sos_events(payload: SosEventSyncRequest):
     share_links: dict[str, str] = {}
 
     for event in payload.events:
-        row = event.model_dump()
-        for key, value in row.items():
-            if isinstance(value, datetime):
-                row[key] = value.isoformat()
-        row["synced_at"] = datetime.utcnow().isoformat()
-
-        existing = await (
-            sb.table("sos_events")
-            .select("id,status")
-            .eq("client_event_id", event.client_event_id)
-            .execute()
-        )
-
-        is_new = not existing.data
-        if is_new:
-            result = await sb.table("sos_events").insert(row).execute()
-            saved = result.data[0] if result.data else row
-        else:
-            result = await (
-                sb.table("sos_events")
-                .update(row)
-                .eq("client_event_id", event.client_event_id)
-                .execute()
-            )
-            saved = result.data[0] if result.data else row
+        saved, is_new = await _upsert_sos_event(sb, event)
 
         # Only fire the redundant server-side alert the first time we see
         # this event synced (and it's a real emergency, not a cancelled one).
@@ -197,11 +194,7 @@ async def sync_sos_events(payload: SosEventSyncRequest):
             if is_new:
                 share_link = await _server_side_alert_for_sos(sb, saved)
             else:
-                trip_id = saved.get("trip_id")
-                if trip_id:
-                    trip_result = await sb.table("trips").select("*").eq("id", trip_id).execute()
-                    if trip_result.data:
-                        share_link = await _ensure_emergency_share(sb, trip_result.data[0])
+                share_link = await _share_link_for_trip(sb, saved.get("trip_id"))
             if share_link:
                 share_links[event.client_event_id] = share_link
 

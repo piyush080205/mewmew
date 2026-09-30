@@ -1,6 +1,6 @@
 """Unit tests for live trip sharing (duration/expiry, stop, and
 speed/battery passthrough on location ingestion)."""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -79,7 +79,7 @@ async def test_share_with_duration_sets_expiry(monkeypatch):
     assert resp.share_token
     assert resp.sharing_type == "manual"
     assert resp.share_expires_at is not None
-    assert resp.share_expires_at > datetime.utcnow()
+    assert resp.share_expires_at > datetime.now(timezone.utc)
 
 
 @pytest.mark.asyncio
@@ -166,3 +166,22 @@ async def test_add_location_without_speed_or_battery_still_works(monkeypatch):
     stored = fake_sb._store["location_events"][0]
     assert stored["speed"] is None
     assert stored["battery"] is None
+
+
+@pytest.mark.asyncio
+async def test_add_location_accepts_zero_coordinates(monkeypatch):
+    fake_sb = _FakeSupabase([_make_trip()])
+
+    async def _get_supabase():
+        return fake_sb
+
+    monkeypatch.setattr(trips_router, "get_supabase", _get_supabase)
+
+    class _BG:
+        def add_task(self, *a, **k):
+            pass
+
+    result = await trips_router.add_location("trip-1", {"lat": 0, "lng": 0}, _BG())
+
+    assert result == {"status": "stored"}
+    assert fake_sb._store["location_events"][0]["latitude"] == 0.0

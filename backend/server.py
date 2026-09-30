@@ -4,7 +4,11 @@ Domain logic lives in dedicated modules:
   - models.py        Pydantic request/response models
   - utils.py          time/geo helpers
   - db_helpers.py      shared Supabase read/write helpers
-  - risk_engine.py     rule-based risk detection + alert dispatch
+  - risk_engine.py     rule-based risk detection
+  - alerts.py          push/SMS alert dispatch
+  - sharing.py         emergency live-share links
+  - geo_services.py    Overpass / Nominatim / Unwired Labs lookups
+  - route_scoring.py   pure route-safety scoring + recommendations
   - metro_data.py      Delhi Metro dataset used by route analysis
   - routers/trips.py    trip lifecycle, location/motion ingestion, risk eval
   - routers/sos.py       emergency contacts + offline SOS event sync

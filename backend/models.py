@@ -5,24 +5,6 @@ from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
 
 
-class LocationPoint(BaseModel):
-    """Single location data point"""
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    latitude: float
-    longitude: float
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    accuracy: float = 0.0  # GPS accuracy in meters
-    source: Literal["gps", "cellular_unwiredlabs"] = "gps"
-    accuracy_radius: Optional[float] = None  # For cellular, the radius of uncertainty
-
-class MotionEvent(BaseModel):
-    """Motion sensor event"""
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    accel_variance: float  # Acceleration magnitude variance
-    gyro_variance: float  # Gyroscope rotation variance
-    is_panic: bool = False  # Detected as panic movement
-
 class RiskEvent(BaseModel):
     """Risk detection event"""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -54,13 +36,6 @@ class TripCreate(BaseModel):
     guardian_phone: Optional[str] = None
     guardian_fcm_token: Optional[str] = None
 
-class LocationInput(BaseModel):
-    trip_id: str
-    latitude: float
-    longitude: float
-    accuracy: float = 0.0
-    source: Literal["gps", "cellular_unwiredlabs"] = "gps"
-    accuracy_radius: Optional[float] = None
 
 class CellularTriangulationRequest(BaseModel):
     """Request for cellular triangulation via Unwired Labs"""
@@ -73,10 +48,6 @@ class CellularTriangulationRequest(BaseModel):
     # For IP-based fallback when cell data not available
     use_ip_fallback: bool = True
 
-class MotionInput(BaseModel):
-    trip_id: str
-    accel_variance: float
-    gyro_variance: float
 
 class GuardianUpdate(BaseModel):
     trip_id: str

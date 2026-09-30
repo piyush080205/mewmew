@@ -1,19 +1,19 @@
 """Core risk-detection engine: rule-based (no ML) evaluation of a trip's
-recent location/motion history, plus alert dispatch (push + SMS).
+recent location/motion history. Alert dispatch lives in alerts.py.
 """
 import asyncio
-import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Callable, List, Optional, Tuple
 
 import shared
-from config import FAST2SMS_API_KEY, PUBLIC_BASE_URL
+from alerts import trigger_alerts
 from models import RiskEvent
-from utils import now_ist, is_night_time, calculate_distance, build_sos_alert_message
+from utils import now_ist, is_night_time, calculate_distance
 from db_helpers import (
-    _fetch_recent_locations,
-    _fetch_last_locations,
-    _fetch_recent_motion,
+    fetch_recent_locations,
+    fetch_last_locations,
+    fetch_recent_motion,
     supabase_append_to_array,
 )
 from supabase_client import get_supabase
@@ -55,6 +55,95 @@ RISK_RULES = {
 PANIC_ACCEL_THRESHOLD = 2.0   # m/s^2 variance threshold for panic (lowered from 15)
 PANIC_GYRO_THRESHOLD = 0.5    # rad/s variance threshold for panic (lowered from 5)
 
+SUSTAINED_PANIC_MIN_EVENTS = 3        # panic events within the last 30s
+STOP_DISTANCE_M = 10                  # movement below this after panic = "stopped"
+EARLY_MOVEMENT_MIN_M = 100            # prolonged-stop: earlier hops must total more than this...
+RECENT_STOP_MAX_M = 20                # ...and the latest hops less than this
+MAX_CONFIDENCE = 0.95
+MULTI_SIGNAL_PANIC_BOOST = 0.15
+MULTI_SIGNAL_NIGHT_BOOST = 0.1
+
+
+@dataclass
+class _RuleContext:
+    """Recent trip history that each rule inspects."""
+    now: datetime
+    recent_locations: List[dict]     # last 60s, oldest first
+    recent_panic: List[dict]         # panic motion events in the last 60s
+    very_recent_panic: List[dict]    # panic motion events in the last 30s
+    last_5_locs: List[dict]          # most recent 5 fixes, oldest first
+
+
+_RuleResult = Optional[Tuple[str, List[str]]]
+
+
+def _sustained_panic(ctx: _RuleContext) -> _RuleResult:
+    """3+ panic events in 30 seconds. Triggers on panic alone, without needing other signals."""
+    if len(ctx.very_recent_panic) < SUSTAINED_PANIC_MIN_EVENTS:
+        return None
+    logger.warning(f"SUSTAINED PANIC: {len(ctx.very_recent_panic)} panic events detected")
+    return "SUSTAINED_PANIC_MOVEMENT", ["sustained_panic", f"{len(ctx.very_recent_panic)}_panic_events_in_30s"]
+
+
+def _panic_then_abnormal_stop(ctx: _RuleContext) -> _RuleResult:
+    """Panic movement followed by the last two fixes being < 10m apart."""
+    if not ctx.recent_panic or len(ctx.recent_locations) < 2:
+        return None
+    last_loc, prev_loc = ctx.recent_locations[-1], ctx.recent_locations[-2]
+    distance = calculate_distance(
+        last_loc['latitude'], last_loc['longitude'],
+        prev_loc['latitude'], prev_loc['longitude']
+    )
+    if distance < STOP_DISTANCE_M:
+        return "PANIC_MOVEMENT_ABNORMAL_STOP", ["panic_movement", "sudden_stop"]
+    return None
+
+
+def _panic_at_night(ctx: _RuleContext) -> _RuleResult:
+    if ctx.recent_panic and is_night_time(ctx.now):
+        return "PANIC_MOVEMENT_NIGHT", ["panic_movement", "night_hours"]
+    return None
+
+
+def _gps_loss_then_cellular(ctx: _RuleContext) -> _RuleResult:
+    """Had GPS, now only cellular fixes with continued movement."""
+    if len(ctx.recent_locations) < 3:
+        return None
+    gps = [loc for loc in ctx.recent_locations if loc['source'] == 'gps']
+    cellular = [loc for loc in ctx.recent_locations if loc['source'] == 'cellular_unwiredlabs']
+    if gps and len(cellular) >= 2 and cellular[-1]['timestamp'] > gps[-1]['timestamp']:
+        return "GPS_LOSS_CELLULAR_MOVEMENT", ["gps_lost", "cellular_tracking", "continued_movement"]
+    return None
+
+
+def _prolonged_stop_after_movement(ctx: _RuleContext) -> _RuleResult:
+    """Significant movement over the earlier hops, then near-stationary over the latest two."""
+    locs = ctx.last_5_locs
+    if len(locs) < 5:
+        return None
+    hops = [
+        calculate_distance(
+            locs[i - 1]['latitude'], locs[i - 1]['longitude'],
+            locs[i]['latitude'], locs[i]['longitude']
+        )
+        for i in range(1, len(locs))
+    ]
+    early_movement = sum(hops[:2]) > EARLY_MOVEMENT_MIN_M
+    recent_stop = sum(hops[-2:]) < RECENT_STOP_MAX_M
+    if early_movement and recent_stop:
+        return "PROLONGED_STOP_UNUSUAL_LOCATION", ["movement_detected", "sudden_stop", "location_stationary"]
+    return None
+
+
+# Evaluated in order; the first rule that fires wins.
+_RULES: List[Callable[[_RuleContext], _RuleResult]] = [
+    _sustained_panic,
+    _panic_then_abnormal_stop,
+    _panic_at_night,
+    _gps_loss_then_cellular,
+    _prolonged_stop_after_movement,
+]
+
 
 async def evaluate_risk_rules(trip_id: str) -> Optional[RiskEvent]:
     """
@@ -68,267 +157,44 @@ async def evaluate_risk_rules(trip_id: str) -> Optional[RiskEvent]:
     """
     sb = await get_supabase()
 
-    # Risk can be detected even without location data if we have motion
-    contributing_signals = []
-    detected_rule = None
-    confidence = 0.0
-
-    # Get recent data (last 1 minute for faster response)
     now = now_ist()  # Use IST for accurate night-time detection in India
     one_min_ago = now - timedelta(seconds=60)
     thirty_sec_ago = now - timedelta(seconds=30)
 
     recent_locations, recent_motion, very_recent_motion, last_5_locs = await asyncio.gather(
-        _fetch_recent_locations(sb, trip_id, one_min_ago),
-        _fetch_recent_motion(sb, trip_id, one_min_ago),
-        _fetch_recent_motion(sb, trip_id, thirty_sec_ago),
-        _fetch_last_locations(sb, trip_id, limit=5),
+        fetch_recent_locations(sb, trip_id, one_min_ago),
+        fetch_recent_motion(sb, trip_id, one_min_ago),
+        fetch_recent_motion(sb, trip_id, thirty_sec_ago),
+        fetch_last_locations(sb, trip_id, limit=5),
     )
 
-    # Check for panic movements in recent data
-    recent_panic = [m for m in recent_motion if m.get('is_panic', False)]
-    very_recent_panic = [m for m in very_recent_motion if m.get('is_panic', False)]
-    has_recent_panic = len(recent_panic) > 0
+    ctx = _RuleContext(
+        now=now,
+        recent_locations=recent_locations,
+        recent_panic=[m for m in recent_motion if m.get('is_panic', False)],
+        very_recent_panic=[m for m in very_recent_motion if m.get('is_panic', False)],
+        last_5_locs=last_5_locs,
+    )
 
-    # NEW RULE 0: Sustained Panic Movement (3+ panic events in 30 seconds)
-    # This triggers on panic alone without needing other signals
-    if len(very_recent_panic) >= 3:
-        detected_rule = "SUSTAINED_PANIC_MOVEMENT"
-        contributing_signals = ["sustained_panic", f"{len(very_recent_panic)}_panic_events_in_30s"]
-        confidence = RISK_RULES[detected_rule]["base_confidence"]
-        logger.warning(f"SUSTAINED PANIC: {len(very_recent_panic)} panic events detected")
-
-    # Rule 1: Panic Movement + Abnormal Stop
-    if not detected_rule and has_recent_panic and len(recent_locations) >= 2:
-        last_loc = recent_locations[-1]
-        prev_loc = recent_locations[-2]
-        distance = calculate_distance(
-            last_loc['latitude'], last_loc['longitude'],
-            prev_loc['latitude'], prev_loc['longitude']
-        )
-        # If movement stopped (< 10m) after panic
-        if distance < 10:
-            detected_rule = "PANIC_MOVEMENT_ABNORMAL_STOP"
-            contributing_signals = ["panic_movement", "sudden_stop"]
-            confidence = RISK_RULES[detected_rule]["base_confidence"]
-
-    # Rule 2: Panic Movement During Night
-    if not detected_rule and has_recent_panic and is_night_time(now):
-        detected_rule = "PANIC_MOVEMENT_NIGHT"
-        contributing_signals = ["panic_movement", "night_hours"]
-        confidence = RISK_RULES[detected_rule]["base_confidence"]
-
-    # Rule 3: GPS Loss followed by cellular-only movement
-    if not detected_rule and len(recent_locations) >= 3:
-        # Check if we switched from GPS to cellular
-        gps_locations = [l for l in recent_locations if l['source'] == 'gps']
-        cellular_locations = [l for l in recent_locations if l['source'] == 'cellular_unwiredlabs']
-
-        if len(gps_locations) > 0 and len(cellular_locations) >= 2:
-            # Had GPS, now only cellular with movement
-            if cellular_locations[-1]['timestamp'] > gps_locations[-1]['timestamp']:
-                detected_rule = "GPS_LOSS_CELLULAR_MOVEMENT"
-                contributing_signals = ["gps_lost", "cellular_tracking", "continued_movement"]
-                confidence = RISK_RULES[detected_rule]["base_confidence"]
-
-    # Rule 4: Prolonged stop in unusual location (> 5 min stop after significant movement)
-    if not detected_rule and len(last_5_locs) >= 5:
-        # Check if first 3 showed movement, last 2 are stationary
-        movements = []
-        for i in range(1, len(last_5_locs)):
-            dist = calculate_distance(
-                last_5_locs[i-1]['latitude'], last_5_locs[i-1]['longitude'],
-                last_5_locs[i]['latitude'], last_5_locs[i]['longitude']
-            )
-            movements.append(dist)
-
-        # Movement then stop pattern
-        if len(movements) >= 4:
-            early_movement = sum(movements[:2]) > 100  # > 100m movement
-            recent_stop = sum(movements[-2:]) < 20     # < 20m (stopped)
-            if early_movement and recent_stop:
-                detected_rule = "PROLONGED_STOP_UNUSUAL_LOCATION"
-                contributing_signals = ["movement_detected", "sudden_stop", "location_stationary"]
-                confidence = RISK_RULES[detected_rule]["base_confidence"]
+    detected = next((hit for hit in (rule(ctx) for rule in _RULES) if hit), None)
+    if detected is None:
+        return None
+    rule_name, contributing_signals = detected
 
     # Increase confidence if multiple signals present
-    if has_recent_panic and detected_rule:
-        confidence = min(confidence + 0.15, 0.95)
+    confidence = RISK_RULES[rule_name]["base_confidence"]
+    if ctx.recent_panic:
+        confidence = min(confidence + MULTI_SIGNAL_PANIC_BOOST, MAX_CONFIDENCE)
+    if is_night_time(now):
+        confidence = min(confidence + MULTI_SIGNAL_NIGHT_BOOST, MAX_CONFIDENCE)
 
-    if is_night_time(now) and detected_rule:
-        confidence = min(confidence + 0.1, 0.95)
-
-    if detected_rule:
-        last_loc = recent_locations[-1] if recent_locations else (last_5_locs[-1] if last_5_locs else None)
-        return RiskEvent(
-            rule_name=detected_rule,
-            contributing_signals=contributing_signals,
-            confidence=confidence,
-            last_known_location=last_loc
-        )
-
-    return None
-
-
-async def send_sms_alert(phone: str, message: str, location: Optional[dict] = None) -> bool:
-    """
-    Send SMS alert via Fast2SMS API.
-    Returns True if sent successfully, False otherwise.
-    """
-    if FAST2SMS_API_KEY == 'demo_key':
-        logger.warning("Fast2SMS API key not configured - SMS alert simulated")
-        logger.info(f"SIMULATED SMS to {phone}: {message}")
-        return True  # Simulate success for demo
-
-    try:
-        # Fast2SMS API endpoint
-        url = "https://www.fast2sms.com/dev/bulkV2"
-
-        # Build location string if available
-        loc_str = ""
-        if location:
-            lat = location.get('latitude', 0)
-            lon = location.get('longitude', 0)
-            loc_str = f" Location: https://maps.google.com/?q={lat},{lon}"
-
-        # Clean phone number (remove + and country code if needed for Indian numbers)
-        clean_phone = phone.replace("+", "").replace(" ", "")
-        if clean_phone.startswith("91") and len(clean_phone) > 10:
-            clean_phone = clean_phone[2:]  # Remove 91 prefix for Indian numbers
-
-        # Full message
-        full_message = message + loc_str
-
-        payload = {
-            "route": "q",  # Quick SMS route (for testing/transactional)
-            "message": full_message,
-            "language": "english",
-            "flash": 0,
-            "numbers": clean_phone,
-        }
-
-        headers = {
-            "authorization": FAST2SMS_API_KEY,
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Cache-Control": "no-cache",
-        }
-
-        response = await shared.http_client.post(url, data=payload, headers=headers, timeout=10.0)
-
-        result = response.json()
-
-        if result.get("return") == True or result.get("status_code") == 200:
-            logger.info(f"Fast2SMS: SMS sent successfully to {phone}")
-            return True
-        else:
-            logger.error(f"Fast2SMS error: {result}")
-            return False
-
-    except Exception as e:
-        logger.error(f"Fast2SMS error: {str(e)}")
-        return False
-
-
-async def send_push_notification(fcm_token: str, title: str, body: str) -> bool:
-    """
-    Send push notification via Firebase Cloud Messaging.
-    For MVP, this simulates the notification.
-    """
-    # For MVP without Firebase credentials, we simulate
-    logger.info(f"SIMULATED PUSH to token {fcm_token[:20]}...: {title} - {body}")
-    return True
-
-
-async def _get_sos_share_minutes(sb) -> Optional[int]:
-    """User-configured emergency-share duration (Account settings). None
-    means "share until manually stopped", the historical default."""
-    try:
-        result = await (
-            sb.table("user_settings").select("sos_share_minutes").eq("user_id", "default_user").execute()
-        )
-        return result.data[0]["sos_share_minutes"] if result.data else None
-    except Exception as e:
-        logger.error(f"Failed to read sos_share_minutes setting: {e}")
-        return None
-
-
-async def _ensure_emergency_share(sb, trip: dict) -> Optional[str]:
-    """
-    Auto-start (or keep) an emergency-mode share link when a risk alert
-    fires, so the guardian has a live-tracking link the moment SOS triggers
-    rather than needing the sender to manually tap Share. Reuses the existing
-    share_token machinery (see routers/trips.py: share_trip) with
-    sharing_type='emergency', for the user's configured duration (or no
-    expiry if unset). Returns the share link, or None on failure.
-    """
-    try:
-        if trip.get("share_token") and trip.get("sharing_type") == "emergency":
-            return f"{PUBLIC_BASE_URL}/shared/{trip['share_token']}"
-
-        token = trip.get("share_token") or secrets.token_urlsafe(16)
-        share_minutes = await _get_sos_share_minutes(sb)
-        expires_at = (
-            datetime.now(timezone.utc) + timedelta(minutes=share_minutes) if share_minutes else None
-        )
-        await sb.table("trips").update({
-            "share_token": token,
-            "sharing_type": "emergency",
-            "share_started_at": datetime.now(timezone.utc).isoformat(),
-            "share_expires_at": expires_at.isoformat() if expires_at else None,
-        }).eq("id", trip["id"]).execute()
-        return f"{PUBLIC_BASE_URL}/shared/{token}"
-    except Exception as e:
-        logger.error(f"Failed to auto-start emergency share for trip {trip.get('id')}: {e}")
-        return None
-
-
-async def trigger_alerts(trip: dict, risk_event: RiskEvent) -> dict:
-    """
-    Trigger both push notification and SMS alert.
-    Push is primary, SMS is mandatory fallback.
-    """
-    results = {"push_sent": False, "sms_sent": False}
-
-    sb = await get_supabase()
-    share_link = await _ensure_emergency_share(sb, trip)
-
-    guardian_phone = trip.get('guardian_phone')
-    guardian_fcm_token = trip.get('guardian_fcm_token')
-
-    message = f"⚠️ NIRBHAY ALERT: Potential risk detected. Rule: {risk_event.rule_name}. User may need help."
-    # Plain-ASCII, length-bounded copy for SMS: any non-GSM-7 character (e.g. the
-    # emoji above) forces UCS-2 encoding, which caps a single segment at ~70 chars
-    # instead of ~160 and causes carriers/Fast2SMS to silently split the message
-    # into multiple billed segments for one recipient.
-    #
-    # Location is embedded in the string itself (via build_sos_alert_message)
-    # rather than appended separately, so a missing/stale fix never silently
-    # drops off the message — it always says either a maps link or "unavailable".
-    sms_message = build_sos_alert_message(
-        risk_event.rule_name, risk_event.last_known_location, share_link=share_link
+    last_loc = recent_locations[-1] if recent_locations else (last_5_locs[-1] if last_5_locs else None)
+    return RiskEvent(
+        rule_name=rule_name,
+        contributing_signals=contributing_signals,
+        confidence=confidence,
+        last_known_location=last_loc
     )
-
-    # Try push notification first (primary)
-    if guardian_fcm_token:
-        results["push_sent"] = await send_push_notification(
-            guardian_fcm_token,
-            "🚨 Safety Alert",
-            message
-        )
-
-    # SMS is mandatory fallback (always try). Location is already embedded in
-    # sms_message, so pass None here to avoid appending it a second time.
-    if guardian_phone:
-        results["sms_sent"] = await send_sms_alert(
-            guardian_phone,
-            sms_message,
-            None
-        )
-
-    # Log for auditability
-    logger.info(f"Alert triggered for trip {trip['id']}: push={results['push_sent']}, sms={results['sms_sent']}")
-
-    return results
 
 
 async def check_and_alert_risk(trip_id: str):
@@ -345,11 +211,9 @@ async def check_and_alert_risk(trip_id: str):
         risk_event = await evaluate_risk_rules(trip_id)
 
         if risk_event:
-            # Add risk event to trip
             risk_dict = risk_event.model_dump()
             risk_dict['timestamp'] = risk_dict['timestamp'].isoformat()
 
-            # Trigger alerts
             alert_results = await trigger_alerts(trip, risk_event)
             risk_dict['push_sent'] = alert_results['push_sent']
             risk_dict['sms_sent'] = alert_results['sms_sent']
@@ -363,7 +227,6 @@ async def check_and_alert_risk(trip_id: str):
 
             logger.warning(f"RISK DETECTED for trip {trip_id}: {risk_event.rule_name}")
         else:
-            # Update last check time
             await sb.table("trips").update({
                 "last_risk_check": datetime.utcnow().isoformat()
             }).eq("id", trip_id).execute()

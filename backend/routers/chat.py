@@ -1,5 +1,7 @@
 """Feature 2: Contextual Safety Guidance (Chat Analysis) via Gemini."""
+import asyncio
 import base64
+import json
 
 from fastapi import APIRouter, HTTPException
 
@@ -60,6 +62,63 @@ Respond in JSON format with this structure:
 
 Be thorough but avoid false positives. Consider context and relationship dynamics. Prioritize user safety while being balanced in assessment."""
 
+GEMINI_MODEL = "gemini-2.5-flash"
+
+HELPLINE_RESOURCES = [
+    {"name": "Childline India", "contact": "1098", "type": "helpline"},
+    {"name": "Women Helpline", "contact": "181", "type": "helpline"},
+    {"name": "Cyber Crime Portal", "url": "https://cybercrime.gov.in", "type": "website"},
+    {"name": "National Commission for Women", "contact": "7827-170-170", "type": "helpline"}
+]
+
+# Returned when the model's reply isn't valid JSON.
+UNPARSEABLE_ANALYSIS = {
+    "risk_level": "low_risk",
+    "risk_score": 25,
+    "red_flags": [],
+    "advisory": "Unable to fully analyze the image. Please ensure it's a clear chat screenshot.",
+    "action_items": ["Try uploading a clearer screenshot", "If concerned, trust your instincts and speak to a trusted adult"]
+}
+
+
+def _strip_code_fence(text: str) -> str:
+    """Unwrap a reply that the model wrapped in a ```json ... ``` (or bare ```) block."""
+    if "```json" in text:
+        return text.split("```json")[1].split("```")[0].strip()
+    if "```" in text:
+        return text.split("```")[1].split("```")[0].strip()
+    return text
+
+
+def _parse_analysis(response_text: str) -> dict:
+    text = _strip_code_fence(response_text.strip())
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        logger.warning(f"Failed to parse AI response as JSON: {text[:200]}")
+        return UNPARSEABLE_ANALYSIS
+
+
+def _to_response(analysis: dict) -> ChatAnalysisResponse:
+    red_flags = [
+        RedFlag(
+            type=flag.get('type', 'unknown'),
+            severity=flag.get('severity', 'medium'),
+            evidence=flag.get('evidence', 'Pattern detected'),
+            explanation=flag.get('explanation', 'Potential concern identified')
+        )
+        for flag in analysis.get('red_flags', [])
+    ]
+    return ChatAnalysisResponse(
+        risk_level=analysis.get('risk_level', 'low_risk'),
+        risk_score=analysis.get('risk_score', 25),
+        red_flags=red_flags,
+        advisory=analysis.get('advisory', 'Stay alert and trust your instincts.'),
+        action_items=analysis.get('action_items', ['If something feels wrong, talk to a trusted adult']),
+        resources=HELPLINE_RESOURCES
+    )
+
+
 @router.post("/chat/analyze", response_model=ChatAnalysisResponse)
 async def analyze_chat_safety(request: ChatAnalysisRequest):
     """
@@ -75,78 +134,28 @@ async def analyze_chat_safety(request: ChatAnalysisRequest):
     try:
         from google import genai
         from google.genai import types
-        import json
 
-        # Create client with API key
         client = genai.Client(api_key=GEMINI_API_KEY)
 
-        # Build the message
         analysis_prompt = f"""{CHAT_ANALYSIS_SYSTEM_PROMPT}
 
 Please analyze this chat screenshot for safety concerns."""
         if request.context:
             analysis_prompt += f"\n\nAdditional context from user: {request.context}"
 
-        # Prepare image as Part
         image_part = types.Part.from_bytes(
             data=base64.b64decode(request.image_base64),
             mime_type="image/png"
         )
 
-        # Send for analysis with image using gemini-2.5-flash model
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[analysis_prompt, image_part]
+        # The SDK call is blocking; run it off the event loop.
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=GEMINI_MODEL,
+            contents=[analysis_prompt, image_part],
         )
 
-        # Parse the JSON response
-        response_text = response.text.strip()
-
-        # Handle if response is wrapped in markdown code blocks
-        if "```json" in response_text:
-            response_text = response_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in response_text:
-            response_text = response_text.split("```")[1].split("```")[0].strip()
-
-        try:
-            analysis_data = json.loads(response_text)
-        except json.JSONDecodeError:
-            # If JSON parsing fails, create a default safe response
-            logger.warning(f"Failed to parse AI response as JSON: {response_text[:200]}")
-            analysis_data = {
-                "risk_level": "low_risk",
-                "risk_score": 25,
-                "red_flags": [],
-                "advisory": "Unable to fully analyze the image. Please ensure it's a clear chat screenshot.",
-                "action_items": ["Try uploading a clearer screenshot", "If concerned, trust your instincts and speak to a trusted adult"]
-            }
-
-        # Build red flags list
-        red_flags = []
-        for flag in analysis_data.get('red_flags', []):
-            red_flags.append(RedFlag(
-                type=flag.get('type', 'unknown'),
-                severity=flag.get('severity', 'medium'),
-                evidence=flag.get('evidence', 'Pattern detected'),
-                explanation=flag.get('explanation', 'Potential concern identified')
-            ))
-
-        # Add helpful resources
-        resources = [
-            {"name": "Childline India", "contact": "1098", "type": "helpline"},
-            {"name": "Women Helpline", "contact": "181", "type": "helpline"},
-            {"name": "Cyber Crime Portal", "url": "https://cybercrime.gov.in", "type": "website"},
-            {"name": "National Commission for Women", "contact": "7827-170-170", "type": "helpline"}
-        ]
-
-        return ChatAnalysisResponse(
-            risk_level=analysis_data.get('risk_level', 'low_risk'),
-            risk_score=analysis_data.get('risk_score', 25),
-            red_flags=red_flags,
-            advisory=analysis_data.get('advisory', 'Stay alert and trust your instincts.'),
-            action_items=analysis_data.get('action_items', ['If something feels wrong, talk to a trusted adult']),
-            resources=resources
-        )
+        return _to_response(_parse_analysis(response.text))
 
     except ImportError as e:
         logger.error(f"Failed to import google-generativeai: {e}")

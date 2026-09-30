@@ -52,3 +52,15 @@ def test_sos_message_flags_stale_location():
 def test_sos_message_states_unavailable_when_no_location():
     msg = build_sos_alert_message("GPS_LOSS_CELLULAR_MOVEMENT", None)
     assert "Location: unavailable" in msg
+
+
+def test_parse_iso_datetime_handles_naive_z_and_empty():
+    from utils import parse_iso_datetime
+
+    assert parse_iso_datetime(None) is None
+    assert parse_iso_datetime("") is None
+    naive = parse_iso_datetime("2024-01-01T10:00:00")
+    assert naive.tzinfo is not None and naive.utcoffset().total_seconds() == 0
+    assert parse_iso_datetime("2024-01-01T10:00:00Z") == naive
+    aware = datetime(2024, 1, 1, 10, tzinfo=timezone.utc)
+    assert parse_iso_datetime(aware) is aware

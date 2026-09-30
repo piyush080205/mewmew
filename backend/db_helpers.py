@@ -6,6 +6,13 @@ from fastapi import HTTPException, Header
 from supabase_client import get_supabase
 from shared import logger
 
+_LOCATION_COLUMNS = "latitude,longitude,source,accuracy,accuracy_radius,created_at"
+
+
+def _with_timestamp(row: dict) -> dict:
+    """Expose `created_at` under the `timestamp` key the risk rules read."""
+    return {**row, "timestamp": row["created_at"]}
+
 
 async def resolve_user_id(authorization: Optional[str] = Header(None), fallback: str = "default_user") -> str:
     """
@@ -46,34 +53,46 @@ async def supabase_append_to_array(trip_id: str, column: str, new_item: dict):
     await sb.table("trips").update({column: existing}).eq("id", trip_id).execute()
 
 
-async def _fetch_recent_locations(sb, trip_id: str, since: datetime, limit: int = 200) -> List[dict]:
+async def fetch_emergency_contacts(sb, user_id: str) -> List[dict]:
+    """A user's emergency contacts, highest priority first."""
+    result = await (
+        sb.table("emergency_contacts")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("priority")
+        .execute()
+    )
+    return result.data
+
+
+async def fetch_recent_locations(sb, trip_id: str, since: datetime, limit: int = 200) -> List[dict]:
     """Locations for `trip_id` created at/after `since`, oldest first."""
     result = await (
         sb.table("location_events")
-        .select("latitude,longitude,source,accuracy,accuracy_radius,created_at")
+        .select(_LOCATION_COLUMNS)
         .eq("user_id", trip_id)
         .gte("created_at", since.astimezone(timezone.utc).isoformat())
         .order("created_at")
         .limit(limit)
         .execute()
     )
-    return [{**row, "timestamp": row["created_at"]} for row in result.data]
+    return [_with_timestamp(row) for row in result.data]
 
 
-async def _fetch_last_locations(sb, trip_id: str, limit: int = 5) -> List[dict]:
+async def fetch_last_locations(sb, trip_id: str, limit: int = 5) -> List[dict]:
     """Most recent `limit` locations for `trip_id`, oldest first."""
     result = await (
         sb.table("location_events")
-        .select("latitude,longitude,source,accuracy,accuracy_radius,created_at")
+        .select(_LOCATION_COLUMNS)
         .eq("user_id", trip_id)
         .order("created_at", desc=True)
         .limit(limit)
         .execute()
     )
-    return [{**row, "timestamp": row["created_at"]} for row in reversed(result.data)]
+    return [_with_timestamp(row) for row in reversed(result.data)]
 
 
-async def _fetch_recent_motion(sb, trip_id: str, since: datetime, limit: int = 200) -> List[dict]:
+async def fetch_recent_motion(sb, trip_id: str, since: datetime, limit: int = 200) -> List[dict]:
     """Motion events for `trip_id` created at/after `since`, oldest first."""
     result = await (
         sb.table("sensor_events")
@@ -84,11 +103,10 @@ async def _fetch_recent_motion(sb, trip_id: str, since: datetime, limit: int = 2
         .limit(limit)
         .execute()
     )
-    events = []
-    for row in result.data:
-        sensor_data = row.get("sensor_data") or {}
-        events.append({
-            "is_panic": sensor_data.get("is_panic", False),
+    return [
+        {
+            "is_panic": (row.get("sensor_data") or {}).get("is_panic", False),
             "timestamp": row["created_at"],
-        })
-    return events
+        }
+        for row in result.data
+    ]
