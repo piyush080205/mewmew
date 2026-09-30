@@ -268,3 +268,73 @@ class ChatAnalysisResponse(BaseModel):
     advisory: str
     action_items: List[str]
     resources: List[dict]
+
+# ===========================================
+# User Retention Models
+# ===========================================
+
+class StreakInfo(BaseModel):
+    current_streak: int = 0
+    longest_streak: int = 0
+    total_checkins: int = 0
+    last_checkin_date: Optional[str] = None
+
+class BadgeOut(BaseModel):
+    id: str
+    name: str
+    description: str
+    icon: str
+    category: str
+    requirement_type: str
+    requirement_value: int
+
+class UserBadgeOut(BaseModel):
+    badge_id: str
+    name: str
+    description: str
+    icon: str
+    category: str
+    earned_at: str
+
+class CheckinResponse(BaseModel):
+    already_checked_in: bool
+    streak: StreakInfo
+    new_badges: List[UserBadgeOut] = []
+
+class DashboardStats(BaseModel):
+    total_trips: int = 0
+    completed_trips: int = 0
+    total_distance_km: float = 0.0
+    total_duration_minutes: int = 0
+    current_streak: int = 0
+    longest_streak: int = 0
+    total_checkins: int = 0
+    badges_earned: int = 0
+    reports_submitted: int = 0
+    safety_score: int = 0
+
+class CommunityReportIn(BaseModel):
+    user_id: str = "default_user"
+    latitude: float
+    longitude: float
+    report_type: str  # unsafe_area, poor_lighting, harassment, suspicious_activity, road_issue, other
+    description: Optional[str] = None
+    severity: str = "medium"
+
+class CommunityReportOut(BaseModel):
+    id: str
+    user_id: str
+    latitude: float
+    longitude: float
+    report_type: str
+    description: Optional[str] = None
+    severity: str
+    upvotes: int = 0
+    created_at: Optional[str] = None
+
+class SafetyTipOut(BaseModel):
+    id: str
+    title: str
+    content: str
+    category: str
+    icon: str = "bulb"

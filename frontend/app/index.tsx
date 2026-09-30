@@ -21,6 +21,7 @@ import { router } from 'expo-router';
 import { useTripStore } from '../store/tripStore';
 import MapView from '../components/MapView';
 import SafetyCheckModal from '../components/SafetyCheckModal';
+import StreakWidget from '../components/StreakWidget';
 import {
   startBackgroundTracking,
   stopBackgroundTracking,
@@ -32,6 +33,7 @@ import {
   seedEmergencyContacts,
 } from '../services/BackgroundMotionService';
 import { API_URL, sendLocation, addEmergencyContact } from '../services/api';
+import { getTodaysTip, SafetyTip } from '../services/retentionApi';
 import { fonts, ThemeColors } from '../constants/theme';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -124,6 +126,7 @@ export default function HomeScreen() {
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [countdownSeconds, setCountdownSeconds] = useState(15);
   const [activeShareToken, setActiveShareToken] = useState<string | null>(null);
+  const [dailyTip, setDailyTip] = useState<SafetyTip | null>(null);
 
   // Refs for tracking subscriptions
   const locationSubscription = useRef<any>(null);
@@ -138,6 +141,8 @@ export default function HomeScreen() {
       const { loadSavedGuardian } = useTripStore.getState();
       await loadSavedGuardian();
       await migrateGuardianPhonesToEmergencyContacts();
+      const tip = await getTodaysTip();
+      if (tip) setDailyTip(tip);
     };
     loadData();
   }, []);
@@ -710,22 +715,32 @@ export default function HomeScreen() {
     router.push(session ? '/auth/account' : '/auth/login');
   };
 
+  const FEATURES = [
+    { key: 'routes', icon: 'map', label: 'Routes', desc: 'Safe paths', color: colors.primary, bg: colors.primaryTint, route: '/routes' },
+    { key: 'chat', icon: 'chatbubbles', label: 'Chat', desc: 'Analyze chats', color: colors.danger, bg: colors.dangerTint, route: '/chat-safety' },
+    { key: 'stats', icon: 'stats-chart', label: 'Stats', desc: 'Your journey', color: colors.success, bg: colors.successTint, route: '/dashboard' },
+    { key: 'badges', icon: 'ribbon', label: 'Badges', desc: 'Achievements', color: colors.purple, bg: colors.purpleTint, route: '/badges' },
+    { key: 'report', icon: 'megaphone', label: 'Report', desc: 'Unsafe areas', color: colors.orange, bg: colors.orangeTint, route: '/community' },
+    { key: 'tips', icon: 'bulb', label: 'Tips', desc: 'Daily advice', color: colors.amber, bg: colors.amberTint, route: '/tips' },
+  ] as const;
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.title}>jāgriti</Text>
           </View>
           <View style={styles.headerRight}>
-            <TouchableOpacity onPress={goToAccount} style={styles.debugButton}>
+            <TouchableOpacity onPress={goToAccount} style={styles.headerIcon}>
               <Ionicons
                 name={session ? 'person-circle' : 'person-circle-outline'}
                 size={24}
                 color={colors.textSecondary}
               />
             </TouchableOpacity>
-            <TouchableOpacity onPress={toggleTheme} style={styles.debugButton}>
+            <TouchableOpacity onPress={toggleTheme} style={styles.headerIcon}>
               <Ionicons
                 name={theme === 'dark' ? 'sunny-outline' : 'moon-outline'}
                 size={22}
@@ -733,7 +748,7 @@ export default function HomeScreen() {
               />
             </TouchableOpacity>
             {__DEV__ && (
-              <TouchableOpacity onPress={goToDebug} style={styles.debugButton}>
+              <TouchableOpacity onPress={goToDebug} style={styles.headerIcon}>
                 <Ionicons name="bug-outline" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
             )}
@@ -749,81 +764,75 @@ export default function HomeScreen() {
           </View>
         )}
 
-        <View style={styles.statusCard}>
-          <View style={styles.statusRow}>
-            <View style={styles.statusItem}>
-              <Ionicons
-                name={isTracking ? "radio" : "radio-outline"}
-                size={24}
-                color={isTracking ? colors.success : colors.textSecondary}
-              />
-              <Text style={styles.statusLabel}>Tracking</Text>
-              <Text style={[styles.statusValue, { color: isTracking ? colors.success : colors.textSecondary }]}>
-                {isTracking ? 'Active' : 'Inactive'}
-              </Text>
-            </View>
-
-            <View style={styles.statusItem}>
-              <Ionicons
-                name={trackingSource === 'gps' ? "navigate" : "cellular"}
-                size={24}
-                color={trackingSource === 'gps' ? colors.primary : colors.amber}
-              />
-              <Text style={styles.statusLabel}>Source</Text>
-              <Text style={styles.statusValue}>
-                {trackingSource === 'gps' ? 'GPS' : 'Cellular'}
-              </Text>
-            </View>
-
-            <View style={styles.statusItem}>
-              <Ionicons
-                name={motionStatus === 'panic_detected' ? "alert-circle" : "body"}
-                size={24}
-                color={motionStatus === 'panic_detected' ? colors.danger : colors.success}
-              />
-              <Text style={styles.statusLabel}>Motion</Text>
-              <Text style={[
-                styles.statusValue,
-                { color: motionStatus === 'panic_detected' ? colors.danger : colors.success }
-              ]}>
-                {motionStatus === 'panic_detected' ? 'Alert!' : 'Normal'}
-              </Text>
-            </View>
-          </View>
-
-          {isTracking && (
-            <View style={styles.accuracyRow}>
-              <Text style={styles.accuracyLabel}>Accuracy: </Text>
-              <Text style={styles.accuracyValue}>
-                {accuracy.toFixed(1)}m
-              </Text>
-            </View>
-          )}
-
-          {isTracking && (
-            <View style={[styles.accuracyRow, { borderTopWidth: 0, marginTop: 8, paddingTop: 0 }]}>
-              <Ionicons
-                name={isBackgroundTrackingEnabled ? 'shield-checkmark' : 'shield-outline'}
-                size={16}
-                color={isBackgroundTrackingEnabled ? colors.success : colors.textSecondary}
-              />
-              <Text style={[styles.accuracyLabel, { marginLeft: 6 }]}>Background Protection: </Text>
-              <Text style={[
-                styles.accuracyValue,
-                { color: isBackgroundTrackingEnabled ? colors.success : colors.textSecondary }
-              ]}>
-                {isBackgroundTrackingEnabled ? 'Active' : 'Inactive'}
-              </Text>
-            </View>
-          )}
+        {/* Protection Status Banner */}
+        <View style={[styles.protectionBanner, isTracking && styles.protectionBannerActive]}>
+          <View style={[styles.protectionDot, isTracking && styles.protectionDotActive]} />
+          <Text style={[styles.protectionText, isTracking && styles.protectionTextActive]}>
+            {isTracking ? 'Protection Active' : 'Protection Inactive'}
+          </Text>
         </View>
 
+        {/* Hero Section */}
+        <View style={styles.heroSection}>
+          <Text style={styles.heroTitle}>Go Freely,</Text>
+          <Text style={styles.heroTitle}>We've Got You</Text>
+          <Text style={styles.heroSubtitle}>
+            Your safety companion for every journey
+          </Text>
+        </View>
+
+        {/* Daily Check-in Streak Widget */}
+        <StreakWidget />
+
+        {/* Start / End Trip Button — horizontal style */}
+        <TouchableOpacity
+          style={[styles.tripButton, isTracking && styles.tripButtonEnd]}
+          onPress={isTracking ? handleEndTrip : handleStartTrip}
+          disabled={loading}
+          activeOpacity={0.85}
+        >
+          {loading ? (
+            <ActivityIndicator color={colors.white} size="small" />
+          ) : (
+            <>
+              <View style={styles.tripButtonContent}>
+                <Ionicons
+                  name={isTracking ? 'stop-circle' : 'navigate'}
+                  size={24}
+                  color={colors.white}
+                />
+                <View style={styles.tripButtonTextWrap}>
+                  <Text style={styles.tripButtonLabel}>
+                    {isTracking ? 'End Trip' : 'Start Trip'}
+                  </Text>
+                  <Text style={styles.tripButtonSub}>
+                    {isTracking ? 'Stop safety tracking' : 'Begin safety tracking'}
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={22} color={colors.white} />
+            </>
+          )}
+        </TouchableOpacity>
+
+        {lastRiskRule && (
+          <View style={styles.riskBanner}>
+            <Ionicons name="warning" size={24} color={colors.white} />
+            <View style={styles.riskTextContainer}>
+              <Text style={styles.riskTitle}>Risk Detected</Text>
+              <Text style={styles.riskRule}>{lastRiskRule}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Map when tracking */}
         {isTracking && locations.length > 0 && (
           <View style={styles.mapContainer}>
             <MapView locations={locations} />
           </View>
         )}
 
+        {/* Guardian / Phone Input */}
         {showPhoneInput && (
           <View style={styles.phoneInputCard}>
             <Text style={styles.phoneInputTitle}>Guardian Phone Numbers</Text>
@@ -831,7 +840,6 @@ export default function HomeScreen() {
               Alerts will be sent to these numbers in case of emergency
             </Text>
 
-            {/* Guardian 1 (Primary) */}
             <View style={styles.guardianInputRow}>
               <Text style={styles.guardianLabel}>Primary Guardian</Text>
               <TextInput
@@ -844,7 +852,6 @@ export default function HomeScreen() {
               />
             </View>
 
-            {/* Guardian 2 */}
             <View style={styles.guardianInputRow}>
               <Text style={styles.guardianLabel}>Guardian 2 (Optional)</Text>
               <TextInput
@@ -857,7 +864,6 @@ export default function HomeScreen() {
               />
             </View>
 
-            {/* Guardian 3 */}
             <View style={styles.guardianInputRow}>
               <Text style={styles.guardianLabel}>Guardian 3 (Optional)</Text>
               <TextInput
@@ -898,7 +904,7 @@ export default function HomeScreen() {
               {guardianPhone2 ? <Text style={styles.guardianTextSecondary}>Guardian 2: {guardianPhone2}</Text> : null}
               {guardianPhone3 ? <Text style={styles.guardianTextSecondary}>Guardian 3: {guardianPhone3}</Text> : null}
             </View>
-            <Ionicons name="pencil" size={16} color={colors.textSecondary} />
+            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
           </TouchableOpacity>
         )}
 
@@ -926,66 +932,101 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity
-          style={[
-            styles.mainButton,
-            isTracking ? styles.endButton : styles.startButton,
-          ]}
-          onPress={isTracking ? handleEndTrip : handleStartTrip}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.white} size="large" />
-          ) : (
-            <>
-              <Ionicons
-                name={isTracking ? "stop-circle" : "play-circle"}
-                size={48}
-                color={colors.white}
-              />
-              <Text style={styles.mainButtonText}>
-                {isTracking ? 'End Trip' : 'Start Trip'}
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        {lastRiskRule && (
-          <View style={styles.riskBanner}>
-            <Ionicons name="warning" size={24} color={colors.white} />
-            <View style={styles.riskTextContainer}>
-              <Text style={styles.riskTitle}>Risk Detected</Text>
-              <Text style={styles.riskRule}>{lastRiskRule}</Text>
-            </View>
-          </View>
-        )}
-
-        {/* New Features Section */}
+        {/* Feature Grid — 3x2 with chevrons */}
         <View style={styles.featuresSection}>
           <Text style={styles.featuresSectionTitle}>Safety Tools</Text>
           <View style={styles.featuresGrid}>
-            <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/routes')}>
-              <View style={[styles.featureIconContainer, { backgroundColor: colors.primaryTint }]}>
-                <Ionicons name="map" size={28} color={colors.primary} />
-              </View>
-              <Text style={styles.featureTitle}>Safe Routes</Text>
-              <Text style={styles.featureDesc}>Find safer travel paths</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/chat-safety')}>
-              <View style={[styles.featureIconContainer, { backgroundColor: colors.dangerTint }]}>
-                <Ionicons name="chatbubbles" size={28} color={colors.danger} />
-              </View>
-              <Text style={styles.featureTitle}>Chat Safety</Text>
-              <Text style={styles.featureDesc}>Analyze suspicious chats</Text>
-            </TouchableOpacity>
+            {FEATURES.map((f) => (
+              <TouchableOpacity
+                key={f.key}
+                style={styles.featureCard}
+                onPress={() => router.push(f.route as any)}
+                activeOpacity={0.75}
+              >
+                <View style={[styles.featureIconContainer, { backgroundColor: f.bg }]}>
+                  <Ionicons name={f.icon as any} size={24} color={f.color} />
+                </View>
+                <View style={styles.featureTextWrap}>
+                  <Text style={styles.featureTitle}>{f.label}</Text>
+                  <Text style={styles.featureDesc}>{f.desc}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 
-        <View style={styles.backgroundStatusCard}>
-          <Ionicons name="shield-checkmark" size={17} color={colors.success} />
-          <Text style={styles.backgroundStatusText}>
-            Background protection is on — you're covered even if the app is closed
+        {/* Live Safety Status */}
+        <View style={styles.liveStatusCard}>
+          <View style={styles.liveStatusHeader}>
+            <Ionicons name="pulse" size={18} color={colors.primary} />
+            <Text style={styles.liveStatusTitle}>Live Safety Status</Text>
+          </View>
+          <View style={styles.liveStatusRow}>
+            <View style={styles.liveStatusItem}>
+              <Ionicons
+                name={isTracking ? 'radio' : 'radio-outline'}
+                size={18}
+                color={isTracking ? colors.success : colors.textMuted}
+              />
+              <Text style={styles.liveStatusLabel}>Tracking</Text>
+              <Text style={[styles.liveStatusValue, { color: isTracking ? colors.success : colors.textMuted }]}>
+                {isTracking ? 'On' : 'Off'}
+              </Text>
+            </View>
+            <View style={styles.liveStatusDivider} />
+            <View style={styles.liveStatusItem}>
+              <Ionicons
+                name={trackingSource === 'gps' ? 'navigate' : 'cellular'}
+                size={18}
+                color={trackingSource === 'gps' ? colors.primary : colors.amber}
+              />
+              <Text style={styles.liveStatusLabel}>Source</Text>
+              <Text style={styles.liveStatusValue}>
+                {trackingSource === 'gps' ? 'GPS' : 'Cell'}
+              </Text>
+            </View>
+            <View style={styles.liveStatusDivider} />
+            <View style={styles.liveStatusItem}>
+              <Ionicons
+                name={motionStatus === 'panic_detected' ? 'alert-circle' : 'body'}
+                size={18}
+                color={motionStatus === 'panic_detected' ? colors.danger : colors.success}
+              />
+              <Text style={styles.liveStatusLabel}>Motion</Text>
+              <Text style={[styles.liveStatusValue, { color: motionStatus === 'panic_detected' ? colors.danger : colors.success }]}>
+                {motionStatus === 'panic_detected' ? 'Alert' : 'OK'}
+              </Text>
+            </View>
+          </View>
+          {isTracking && (
+            <View style={styles.liveStatusExtra}>
+              <Text style={styles.liveStatusExtraText}>
+                Accuracy: {accuracy.toFixed(1)}m • Background: {isBackgroundTrackingEnabled ? 'Active' : 'Inactive'}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Daily Tip */}
+        {dailyTip && (
+          <TouchableOpacity style={styles.tipCard} onPress={() => router.push('/tips')}>
+            <View style={styles.tipIconWrap}>
+              <Ionicons name="bulb" size={20} color={colors.amber} />
+            </View>
+            <View style={styles.tipContent}>
+              <Text style={styles.tipLabel}>Tip of the Day</Text>
+              <Text style={styles.tipText} numberOfLines={2}>{dailyTip.content}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
+
+        {/* Motivational Quote */}
+        <View style={styles.quoteCard}>
+          <Ionicons name="sparkles" size={18} color={colors.primary} />
+          <Text style={styles.quoteText}>
+            "Safety isn't just a feature — it's a right. Stay aware, stay empowered."
           </Text>
         </View>
       </ScrollView>
@@ -1032,7 +1073,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  debugButton: {
+  headerIcon: {
     padding: 8,
   },
   webNotice: {
@@ -1052,51 +1093,107 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 12,
     flex: 1,
   },
-  statusCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    borderColor: colors.border,
-    borderWidth: 1,
-  },
-  statusRow: {
+  protectionBanner: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statusItem: {
     alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     gap: 8,
+    marginBottom: 16,
   },
-  statusLabel: {
+  protectionBannerActive: {
+    backgroundColor: colors.successTint,
+  },
+  protectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.textMuted,
+  },
+  protectionDotActive: {
+    backgroundColor: colors.success,
+  },
+  protectionText: {
+    fontSize: 13,
+    fontFamily: fonts.semiBold,
+    color: colors.textMuted,
+  },
+  protectionTextActive: {
+    color: colors.success,
+  },
+  heroSection: {
+    marginBottom: 20,
+  },
+  heroTitle: {
+    fontSize: 30,
+    fontFamily: fonts.extraBold,
+    color: colors.textPrimary,
+    lineHeight: 38,
+  },
+  heroSubtitle: {
+    fontSize: 15,
+    fontFamily: fonts.regular,
+    color: colors.textSecondary,
+    marginTop: 8,
+  },
+  tripButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 16,
+  },
+  tripButtonEnd: {
+    backgroundColor: colors.danger,
+  },
+  tripButtonContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  tripButtonTextWrap: {
+    flex: 1,
+  },
+  tripButtonLabel: {
+    color: colors.white,
+    fontSize: 18,
+    fontFamily: fonts.bold,
+  },
+  tripButtonSub: {
+    color: colors.white,
     fontSize: 12,
     fontFamily: fonts.regular,
-    color: colors.textSecondary,
+    opacity: 0.8,
+    marginTop: 2,
   },
-  statusValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: fonts.semiBold,
-    color: colors.textPrimary,
-  },
-  accuracyRow: {
+  riskBanner: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    alignItems: 'center',
+    backgroundColor: colors.danger,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    gap: 12,
   },
-  accuracyLabel: {
-    color: colors.textSecondary,
-    fontFamily: fonts.regular,
-    fontSize: 14,
+  riskTextContainer: {
+    flex: 1,
   },
-  accuracyValue: {
-    color: colors.primary,
-    fontSize: 14,
+  riskTitle: {
+    color: colors.white,
+    fontSize: 16,
     fontWeight: '600',
     fontFamily: fonts.semiBold,
+  },
+  riskRule: {
+    color: colors.white,
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    opacity: 0.9,
   },
   mapContainer: {
     height: 250,
@@ -1223,51 +1320,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontWeight: '600',
     fontFamily: fonts.semiBold,
   },
-  mainButton: {
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    minHeight: 120,
-  },
-  startButton: {
-    backgroundColor: colors.success,
-  },
-  endButton: {
-    backgroundColor: colors.danger,
-  },
-  mainButtonText: {
-    color: colors.white,
-    fontSize: 24,
-    fontWeight: 'bold',
-    fontFamily: fonts.extraBold,
-    marginTop: 8,
-  },
-  riskBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.danger,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    gap: 12,
-  },
-  riskTextContainer: {
-    flex: 1,
-  },
-  riskTitle: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: fonts.semiBold,
-  },
-  riskRule: {
-    color: colors.white,
-    fontFamily: fonts.regular,
-    fontSize: 12,
-    opacity: 0.9,
-  },
   featuresSection: {
     marginBottom: 16,
   },
@@ -1280,52 +1332,147 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   featuresGrid: {
     flexDirection: 'row',
-    gap: 12,
+    flexWrap: 'wrap',
+    gap: 10,
   },
   featureCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    borderColor: colors.border,
-    borderWidth: 1,
-  },
-  featureIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  featureTitle: {
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: fonts.semiBold,
-    marginBottom: 4,
-  },
-  featureDesc: {
-    color: colors.textMuted,
-    fontFamily: fonts.regular,
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  backgroundStatusCard: {
+    width: '48%' as any,
+    flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: 14,
-    padding: 13,
+    padding: 14,
+    gap: 12,
+    borderColor: colors.border,
+    borderWidth: 1,
+  },
+  featureIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featureTextWrap: {
+    flex: 1,
+  },
+  featureTitle: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontFamily: fonts.semiBold,
+  },
+  featureDesc: {
+    color: colors.textMuted,
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  liveStatusCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderColor: colors.border,
+    borderWidth: 1,
+  },
+  liveStatusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  liveStatusTitle: {
+    fontSize: 14,
+    fontFamily: fonts.semiBold,
+    color: colors.textPrimary,
+  },
+  liveStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  liveStatusItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+  },
+  liveStatusDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: colors.border,
+  },
+  liveStatusLabel: {
+    fontSize: 11,
+    fontFamily: fonts.regular,
+    color: colors.textSecondary,
+  },
+  liveStatusValue: {
+    fontSize: 13,
+    fontFamily: fonts.semiBold,
+    color: colors.textPrimary,
+  },
+  liveStatusExtra: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    alignItems: 'center',
+  },
+  liveStatusExtraText: {
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    color: colors.textSecondary,
+  },
+  tipCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.amberTint,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    gap: 12,
+    borderColor: colors.amberBorder,
+    borderWidth: 1,
+  },
+  tipIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.amber + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tipContent: {
+    flex: 1,
+  },
+  tipLabel: {
+    fontSize: 11,
+    fontFamily: fonts.semiBold,
+    color: colors.amber,
+    marginBottom: 2,
+  },
+  tipText: {
+    fontSize: 13,
+    fontFamily: fonts.regular,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  quoteCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: colors.primaryTint,
+    borderRadius: 14,
+    padding: 16,
     gap: 10,
     borderColor: colors.border,
     borderWidth: 1,
   },
-  backgroundStatusText: {
+  quoteText: {
     flex: 1,
+    fontSize: 13,
+    fontFamily: fonts.medium,
     color: colors.textSecondary,
-    fontFamily: fonts.regular,
-    fontSize: 12,
+    fontStyle: 'italic',
+    lineHeight: 20,
   },
 });

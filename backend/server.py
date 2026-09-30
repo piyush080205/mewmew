@@ -22,7 +22,7 @@ import httpx
 import shared
 from config import UNWIRED_LABS_API_KEY, FAST2SMS_API_KEY
 from supabase_client import get_supabase
-from routers import trips, sos, safety, chat
+from routers import trips, sos, safety, chat, retention
 
 
 @asynccontextmanager
@@ -48,6 +48,7 @@ api_router.include_router(trips.router)
 api_router.include_router(sos.router)
 api_router.include_router(safety.router)
 api_router.include_router(chat.router)
+api_router.include_router(retention.router)
 
 
 @api_router.get("/")
