@@ -14,7 +14,7 @@ logger = shared.logger
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
-NOMINATIM_HEADERS = {"User-Agent": "NirbhayApp/1.0 (Women Safety App)"}
+NOMINATIM_HEADERS = {"User-Agent": "JagritiApp/1.0 (Women Safety App)"}
 UNWIRED_LABS_URL = "https://us1.unwiredlabs.com/v2/process.php"
 
 POLICE_RADIUS_M = 2000

@@ -12,7 +12,7 @@ export async function requestSmsPermission(): Promise<boolean> {
 
   const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.SEND_SMS, {
     title: 'SMS Permission',
-    message: 'Nirbhay needs SMS permission to send emergency alerts directly from your phone, even without internet.',
+    message: 'Jagriti needs SMS permission to send emergency alerts directly from your phone, even without internet.',
     buttonPositive: 'Allow',
   });
 

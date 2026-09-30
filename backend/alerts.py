@@ -84,7 +84,7 @@ async def trigger_alerts(trip: dict, risk_event: RiskEvent) -> dict:
     guardian_phone = trip.get('guardian_phone')
     guardian_fcm_token = trip.get('guardian_fcm_token')
 
-    push_message = f"⚠️ NIRBHAY ALERT: Potential risk detected. Rule: {risk_event.rule_name}. User may need help."
+    push_message = f"⚠️ JAGRITI ALERT: Potential risk detected. Rule: {risk_event.rule_name}. User may need help."
     # Plain-ASCII, length-bounded copy for SMS: any non-GSM-7 character (e.g. the
     # emoji above) forces UCS-2 encoding, which caps a single segment at ~70 chars
     # instead of ~160 and causes carriers/Fast2SMS to silently split the message

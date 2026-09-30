@@ -1,4 +1,4 @@
-"""Nirbhay Safety API — app factory.
+"""Jagriti Safety API — app factory.
 
 Domain logic lives in dedicated modules:
   - models.py        Pydantic request/response models
@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
 
 
 # Create the main app (single instance)
-app = FastAPI(title="Nirbhay Safety API", lifespan=lifespan)
+app = FastAPI(title="Jagriti Safety API", lifespan=lifespan)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -56,7 +56,7 @@ api_router.include_router(chat.router)
 
 @api_router.get("/")
 async def root():
-    return {"message": "Nirbhay Safety API - Autonomous Women Safety System"}
+    return {"message": "Jagriti Safety API - Autonomous Women Safety System"}
 
 @api_router.get("/health")
 async def health_check():

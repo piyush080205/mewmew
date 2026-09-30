@@ -11,6 +11,6 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger("nirbhay")
+logger = logging.getLogger("jagriti")
 
 http_client: Optional[httpx.AsyncClient] = None
