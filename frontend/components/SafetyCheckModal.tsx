@@ -123,12 +123,12 @@ export default function SafetyCheckModal({
 
             <TouchableOpacity style={[styles.button, styles.yesButton]} onPress={handleImSafe}>
               <Ionicons name="checkmark" size={24} color={colors.white} />
-              <Text style={styles.buttonText}>I'm Safe</Text>
+              <Text style={styles.buttonText}>I&apos;m Safe</Text>
             </TouchableOpacity>
           </View>
 
           <Text style={styles.hint}>
-            If you don't respond, an SOS alert will be sent automatically
+            If you don&apos;t respond, an SOS alert will be sent automatically
           </Text>
         </View>
       </View>

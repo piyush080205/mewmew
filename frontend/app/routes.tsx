@@ -16,16 +16,15 @@ import { router } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 
-import { API_URL } from '../services/api';
+import { analyzeRoute as fetchRouteAnalysis, getCityData, searchPlaces as searchPlacesApi } from '../services/api';
+import type { CityData, GeocodeResult, RouteAnalysis, RouteRequest } from '../services/types';
 import {
   getNearbyHotspots,
   riskColor,
-  riskScoreColor,
   haversineKm,
-  CrimeHotspot,
-  SafeCorridor,
-  PoliceStation,
-} from '../services/delhiCrimeData';
+} from '../services/crimeData';
+import { fonts, ThemeColors } from '../constants/theme';
+import { useTheme } from '../contexts/ThemeContext';
 
 /** Numbers that work anywhere in India, unlike the old Delhi-only list. */
 const PAN_INDIA_EMERGENCY_CONTACTS = {
@@ -36,61 +35,6 @@ const PAN_INDIA_EMERGENCY_CONTACTS = {
   unified_emergency: '112',
 };
 
-interface CityData {
-  city_name: string;
-  matched: boolean;
-  crime_index: number | null;
-  safety_index: number | null;
-  source: string;
-  crime_hotspots: CrimeHotspot[];
-  safe_corridors: SafeCorridor[];
-  police_stations: PoliceStation[];
-}
-import { fonts, ThemeColors } from '../constants/theme';
-import { useTheme } from '../contexts/ThemeContext';
-
-/* ─────────────────── Types ─────────────────── */
-interface SafetyFactor {
-  name: string;
-  score: number;
-  description: string;
-  icon: string;
-}
-
-interface TransportMode {
-  mode: string;
-  safety_score: number;
-  estimated_time: number;
-  recommendation: string;
-  icon: string;
-}
-
-interface SafeSpot {
-  name: string;
-  type: string;
-  icon: string;
-  lat: number;
-  lng: number;
-  distance_m: number;
-}
-
-interface RouteAnalysis {
-  overall_safety_score: number;
-  safety_level: string;
-  factors: SafetyFactor[];
-  transport_modes: TransportMode[];
-  route_points: any[];
-  recommendations: string[];
-  nearby_safe_spots: SafeSpot[];
-}
-
-interface GeocodeResult {
-  name: string;
-  display_name: string;
-  lat: number;
-  lng: number;
-  type: string;
-}
 
 /* ─────────────────── Active tab ─────────────────── */
 type ActiveTab = 'route' | 'hotspots' | 'corridors' | 'police';
@@ -122,22 +66,10 @@ export default function SafeRoutesScreen() {
     ? getNearbyHotspots(cityData.crime_hotspots, currentLocation.lat, currentLocation.lng, 20)
     : [];
 
-  /* ── get location ── */
-  useEffect(() => {
-    getCurrentLocation();
-  }, []);
-
-  useEffect(() => {
-    if (currentLocation) fetchCityData(currentLocation.lat, currentLocation.lng);
-  }, [currentLocation?.lat, currentLocation?.lng]);
-
   const fetchCityData = async (lat: number, lng: number) => {
     setCityDataLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/safety/city-data?lat=${lat}&lng=${lng}`);
-      if (res.ok) {
-        setCityData(await res.json());
-      }
+      setCityData(await getCityData(lat, lng));
     } catch {
       /* silent — banner/tabs just show nothing until it succeeds */
     } finally {
@@ -166,6 +98,26 @@ export default function SafeRoutesScreen() {
     }
   };
 
+  /* ── get location ── */
+  useEffect(() => {
+    getCurrentLocation();
+  }, []);
+
+  useEffect(() => {
+    if (currentLocation) fetchCityData(currentLocation.lat, currentLocation.lng);
+  }, [currentLocation?.lat, currentLocation?.lng]);
+
+  const searchPlaces = async (query: string) => {
+    setSearching(true);
+    try {
+      setSearchResults(await searchPlacesApi(query));
+    } catch {
+      /* silent */
+    } finally {
+      setSearching(false);
+    }
+  };
+
   /* ── place search with debounce ── */
   useEffect(() => {
     const t = setTimeout(() => {
@@ -174,21 +126,6 @@ export default function SafeRoutesScreen() {
     }, 500);
     return () => clearTimeout(t);
   }, [destinationText]);
-
-  const searchPlaces = async (query: string) => {
-    setSearching(true);
-    try {
-      const res = await fetch(`${API_URL}/api/geocode/search?q=${encodeURIComponent(query)}&limit=5`);
-      if (res.ok) {
-        const data = await res.json();
-        setSearchResults(data.results || []);
-      }
-    } catch {
-      /* silent */
-    } finally {
-      setSearching(false);
-    }
-  };
 
   const selectDestination = (result: GeocodeResult) => {
     setSelectedDestination(result);
@@ -208,23 +145,14 @@ export default function SafeRoutesScreen() {
     }
     setLoading(true);
     try {
-      const body: any = { origin_lat: currentLocation.lat, origin_lng: currentLocation.lng };
+      const body: RouteRequest = { origin_lat: currentLocation.lat, origin_lng: currentLocation.lng };
       if (selectedDestination) {
         body.dest_lat = selectedDestination.lat;
         body.dest_lng = selectedDestination.lng;
       } else {
         body.dest_place_name = destinationText;
       }
-      const res = await fetch(`${API_URL}/api/routes/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Failed to analyse route');
-      }
-      setAnalysis(await res.json());
+      setAnalysis(await fetchRouteAnalysis(body));
       setActiveTab('route');
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to analyse route. Please try again.');

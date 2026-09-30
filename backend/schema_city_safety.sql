@@ -1,5 +1,5 @@
 -- City-scoped crime/safety dataset, replacing the Delhi-only hardcoded
--- frontend/services/delhiCrimeData.ts. Looked up by routers/safety.py's
+-- frontend/services/crimeData.ts. Looked up by routers/safety.py's
 -- GET /api/safety/city-data via reverse-geocoded city name (case-insensitive
 -- match on city_name), falling back to the "DEFAULT" row for any city not
 -- listed here.
@@ -24,7 +24,7 @@ values ('DEFAULT', 'No curated data for this city yet — showing neutral defaul
 on conflict (city_name) do nothing;
 
 -- Delhi — migrated verbatim from the old DELHI_CRIME_DATA constant in
--- frontend/services/delhiCrimeData.ts.
+-- frontend/services/crimeData.ts.
 insert into city_safety_data (
   city_name, center_lat, center_lng, crime_index, safety_index, source,
   crime_hotspots, safe_corridors, police_stations

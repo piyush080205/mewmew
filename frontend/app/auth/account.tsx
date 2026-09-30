@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { fonts, ThemeColors } from '../../constants/theme';
-import { API_URL } from '../../services/api';
+import { getSettings, saveSosShareMinutes } from '../../services/api';
 
 const FOUNDERS = [
   { name: 'Mehak Sharma', role: 'Co-Founder', photo: require('../../assets/founders/mehak-sharma.jpg') },
@@ -33,11 +33,8 @@ export default function AccountScreen() {
   React.useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/api/settings`);
-        if (res.ok) {
-          const data = await res.json();
-          setSosShareMinutes(data.sos_share_minutes ?? null);
-        }
+        const settings = await getSettings();
+        setSosShareMinutes(settings.sos_share_minutes ?? null);
       } catch {
         // Keep default (until manually stopped) if settings can't be reached.
       } finally {
@@ -51,12 +48,7 @@ export default function AccountScreen() {
     setSosShareMinutes(minutes);
     setSavingMinutes(minutes);
     try {
-      const res = await fetch(`${API_URL}/api/settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sos_share_minutes: minutes }),
-      });
-      if (!res.ok) throw new Error('Failed to save');
+      await saveSosShareMinutes(minutes);
     } catch {
       setSosShareMinutes(previous);
       Alert.alert('Could not save', 'Check your connection and try again.');

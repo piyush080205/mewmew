@@ -1,11 +1,9 @@
 import React from 'react';
-import { View, StyleSheet, Text, Dimensions, Platform } from 'react-native';
+import { View, StyleSheet, Text } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { LocationPoint } from '../store/tripStore';
 import { ThemeColors } from '../constants/theme';
 import { useTheme } from '../contexts/ThemeContext';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface MapViewProps {
   locations: LocationPoint[];

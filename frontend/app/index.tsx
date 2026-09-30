@@ -9,7 +9,6 @@ import {
   TextInput,
   Platform,
   ActivityIndicator,
-  Dimensions,
   AppState,
   AppStateStatus,
   Share,
@@ -29,16 +28,12 @@ import {
   getPendingEmergencyEventId,
   confirmSafe as confirmSafeNative,
   triggerManualSos,
-  seedEmergencyContacts,
 } from '../services/BackgroundMotionService';
-import { API_URL, sendLocation, addEmergencyContact } from '../services/api';
+import { createTrip, endTrip as endTripOnServer, updateTripGuardians, shareTrip, stopSharingTrip, sharedTripUrl, sendLocation } from '../services/api';
+import { buildGuardianContacts, syncEmergencyContacts } from '../services/guardianContacts';
 import { fonts, ThemeColors } from '../constants/theme';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-
 
 // Web fallback for demo purposes
 const isWeb = Platform.OS === 'web';
@@ -58,24 +53,9 @@ async function migrateGuardianPhonesToEmergencyContacts() {
     if (alreadyMigrated === 'true') return;
 
     const { guardianPhone, guardianPhone2, guardianPhone3 } = useTripStore.getState();
-    const contacts = [
-      { id: 'guardian-1', name: 'Primary Guardian', phoneNumber: guardianPhone, priority: 1, isPrimary: true },
-      { id: 'guardian-2', name: 'Guardian 2', phoneNumber: guardianPhone2, priority: 2, isPrimary: false },
-      { id: 'guardian-3', name: 'Guardian 3', phoneNumber: guardianPhone3, priority: 3, isPrimary: false },
-    ].filter((c) => c.phoneNumber && c.phoneNumber.length > 0);
-
+    const contacts = buildGuardianContacts(guardianPhone, guardianPhone2, guardianPhone3);
     if (contacts.length > 0) {
-      const { seedEmergencyContacts } = await import('../services/BackgroundMotionService');
-      const { addEmergencyContact } = await import('../services/api');
-      await seedEmergencyContacts(contacts);
-      for (const contact of contacts) {
-        await addEmergencyContact({
-          name: contact.name,
-          phone_number: contact.phoneNumber,
-          priority: contact.priority,
-          is_primary: contact.isPrimary,
-        });
-      }
+      await syncEmergencyContacts(contacts);
     }
 
     // Mark done regardless of network success — the offline seeding above
@@ -200,17 +180,6 @@ export default function HomeScreen() {
     return () => subscription.remove();
   }, [isTracking, showSafetyCheck]);
 
-  // Request permissions on mount (native only)
-  useEffect(() => {
-    if (!isWeb) {
-      requestNativePermissions();
-    }
-  }, []);
-
-  useEffect(() => {
-    sosActiveRef.current = showSafetyCheck || motionStatus === 'panic_detected';
-  }, [showSafetyCheck, motionStatus]);
-
   const requestNativePermissions = async () => {
     if (isWeb) {
       setLocationPermission(true);
@@ -225,7 +194,7 @@ export default function HomeScreen() {
         setLocationPermission(true);
         try {
           await ExpoLocation.requestBackgroundPermissionsAsync();
-        } catch (e) {
+        } catch {
           console.log('Background permission not available');
         }
       } else {
@@ -238,6 +207,17 @@ export default function HomeScreen() {
       console.error('Permission error:', error);
     }
   };
+
+  // Request permissions on mount (native only)
+  useEffect(() => {
+    if (!isWeb) {
+      requestNativePermissions();
+    }
+  }, []);
+
+  useEffect(() => {
+    sosActiveRef.current = showSafetyCheck || motionStatus === 'panic_detected';
+  }, [showSafetyCheck, motionStatus]);
 
 
   // Fallback to last known location when GPS fails
@@ -402,7 +382,6 @@ export default function HomeScreen() {
     }
 
     // Native location tracking with GPS fallback to IP geolocation
-    let gpsAttemptFailed = false;
     let fallbackIntervalId: ReturnType<typeof setInterval> | null = null;
 
     try {
@@ -426,7 +405,6 @@ export default function HomeScreen() {
       );
     } catch (error) {
       console.error('GPS location tracking error:', error);
-      gpsAttemptFailed = true;
 
       // GPS failed - start last-known-location fallback polling
       console.log('Starting last-known-location fallback (80-100m accuracy)...');
@@ -517,34 +495,14 @@ export default function HomeScreen() {
 
     setLoading(true);
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      }
-
-      const response = await fetch(`${API_URL}/api/trips`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          user_id: 'default_user',
-          guardian_phone: guardianPhone,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Backend error:', response.status, errorText);
-        throw new Error(`Server error ${response.status}: ${errorText}`);
-      }
-
-      const trip = await response.json();
+      const trip = await createTrip(guardianPhone, session?.access_token);
       startTrip(trip);
 
       await startLocationTracking(trip.id);
 
       // Start native motion detection + offline SOS monitoring (Android
       // foreground service) — this replaces the old JS-only detector.
-      const bgStarted = await startBackgroundTracking(trip.id, buildContactsPayload());
+      const bgStarted = await startBackgroundTracking(trip.id, buildGuardianContacts(guardianPhone, guardianPhone2, guardianPhone3));
       setBackgroundTracking(bgStarted);
       if (bgStarted) {
         console.log('Background protection enabled');
@@ -578,9 +536,7 @@ export default function HomeScreen() {
       await stopBackgroundTracking();
       setBackgroundTracking(false);
 
-      await fetch(`${API_URL}/api/trips/${currentTrip.id}/end`, {
-        method: 'POST',
-      });
+      await endTripOnServer(currentTrip.id);
 
       endTrip();
       setActiveShareToken(null);
@@ -591,18 +547,6 @@ export default function HomeScreen() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Builds the emergency-contacts payload the native Room table and the
-  // backend's emergency_contacts table both expect, from the 3 flat
-  // guardian-phone fields (kept as the input UI — see store/tripStore.ts
-  // deprecation note on guardianPhone/2/3).
-  const buildContactsPayload = () => {
-    return [
-      { id: 'guardian-1', name: 'Primary Guardian', phoneNumber: guardianPhone, priority: 1, isPrimary: true },
-      { id: 'guardian-2', name: 'Guardian 2', phoneNumber: guardianPhone2, priority: 2, isPrimary: false },
-      { id: 'guardian-3', name: 'Guardian 3', phoneNumber: guardianPhone3, priority: 3, isPrimary: false },
-    ].filter((c) => c.phoneNumber && c.phoneNumber.length > 0);
   };
 
   // Save guardian phone
@@ -618,15 +562,10 @@ export default function HomeScreen() {
 
     if (currentTrip) {
       try {
-        await fetch(`${API_URL}/api/trips/${currentTrip.id}/guardian`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            trip_id: currentTrip.id,
-            guardian_phone: phoneInput,
-            guardian_phone_2: guardianPhone2 || null,
-            guardian_phone_3: guardianPhone3 || null,
-          }),
+        await updateTripGuardians(currentTrip.id, {
+          primary: phoneInput,
+          secondary: guardianPhone2,
+          tertiary: guardianPhone3,
         });
       } catch (err) {
         console.error('Failed to update guardian:', err);
@@ -636,21 +575,7 @@ export default function HomeScreen() {
     // Keep the native Room contacts table (used for fully-offline SMS)
     // and the backend emergency_contacts table in sync with whatever the
     // user just saved, independent of whether a trip is active.
-    const contacts = [
-      { id: 'guardian-1', name: 'Primary Guardian', phoneNumber: phoneInput, priority: 1, isPrimary: true },
-      { id: 'guardian-2', name: 'Guardian 2', phoneNumber: guardianPhone2, priority: 2, isPrimary: false },
-      { id: 'guardian-3', name: 'Guardian 3', phoneNumber: guardianPhone3, priority: 3, isPrimary: false },
-    ].filter((c) => c.phoneNumber && c.phoneNumber.length > 0);
-
-    await seedEmergencyContacts(contacts);
-    for (const contact of contacts) {
-      await addEmergencyContact({
-        name: contact.name,
-        phone_number: contact.phoneNumber,
-        priority: contact.priority,
-        is_primary: contact.isPrimary,
-      });
-    }
+    await syncEmergencyContacts(buildGuardianContacts(phoneInput, guardianPhone2, guardianPhone3));
   };
 
   const goToDebug = () => {
@@ -665,17 +590,9 @@ export default function HomeScreen() {
   const startShare = async (durationMinutes: number | null) => {
     if (!currentTrip) return;
     try {
-      const res = await fetch(`${API_URL}/api/trips/${currentTrip.id}/share`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ duration_minutes: durationMinutes, sharing_type: 'manual' }),
-      });
-      if (!res.ok) throw new Error('Failed to create share link');
-      const { share_token } = await res.json();
+      const { share_token } = await shareTrip(currentTrip.id, durationMinutes);
       setActiveShareToken(share_token);
-      // Assumes the Expo web build is hosted at the same origin as API_URL;
-      // point this at the actual web deployment URL if that's not the case.
-      const link = `${API_URL}/shared/${share_token}`;
+      const link = sharedTripUrl(share_token);
       await Share.share({
         message: `Track my live location: ${link}`,
         url: link,
@@ -698,7 +615,7 @@ export default function HomeScreen() {
   const handleStopSharing = async () => {
     if (!currentTrip) return;
     try {
-      await fetch(`${API_URL}/api/trips/${currentTrip.id}/share/stop`, { method: 'POST' });
+      await stopSharingTrip(currentTrip.id);
     } catch (err) {
       console.error('Failed to stop sharing:', err);
     } finally {
@@ -985,7 +902,7 @@ export default function HomeScreen() {
         <View style={styles.backgroundStatusCard}>
           <Ionicons name="shield-checkmark" size={17} color={colors.success} />
           <Text style={styles.backgroundStatusText}>
-            Background protection is on — you're covered even if the app is closed
+            Background protection is on — you&apos;re covered even if the app is closed
           </Text>
         </View>
       </ScrollView>

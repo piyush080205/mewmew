@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Platform,
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,32 +14,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 
-import { API_URL } from '../services/api';
+import { analyzeChat as analyzeChatScreenshot } from '../services/api';
+import type { ChatAnalysis } from '../services/types';
 import { fonts, ThemeColors } from '../constants/theme';
 import { useTheme } from '../contexts/ThemeContext';
-
-interface RedFlag {
-  type: string;
-  severity: string;
-  evidence: string;
-  explanation: string;
-}
-
-interface Resource {
-  name: string;
-  contact?: string;
-  url?: string;
-  type: string;
-}
-
-interface ChatAnalysis {
-  risk_level: string;
-  risk_score: number;
-  red_flags: RedFlag[];
-  advisory: string;
-  action_items: string[];
-  resources: Resource[];
-}
 
 export default function ChatSafetyScreen() {
   const { colors } = useTheme();
@@ -100,21 +77,7 @@ export default function ChatSafetyScreen() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/chat/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image_base64: imageBase64,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to analyze chat');
-      }
-
-      const data = await response.json();
-      setAnalysis(data);
+      setAnalysis(await analyzeChatScreenshot(imageBase64));
     } catch (error: any) {
       console.error('Chat analysis error:', error);
       Alert.alert('Analysis Failed', error.message || 'Failed to analyze the chat. Please try again.');
@@ -279,7 +242,7 @@ export default function ChatSafetyScreen() {
                     {flag.evidence && (
                       <View style={styles.evidenceBox}>
                         <Text style={styles.evidenceLabel}>Evidence:</Text>
-                        <Text style={styles.evidenceText}>"{flag.evidence}"</Text>
+                        <Text style={styles.evidenceText}>&quot;{flag.evidence}&quot;</Text>
                       </View>
                     )}
                     <Text style={styles.flagExplanation}>{flag.explanation}</Text>

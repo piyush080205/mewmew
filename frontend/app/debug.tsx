@@ -15,29 +15,50 @@ import { router } from 'expo-router';
 import { useTripStore } from '../store/tripStore';
 import { colors, fonts } from '../constants/theme';
 
-import { API_URL } from '../services/api';
+import { getHealth, getTripDebugInfo, sendTestAlert } from '../services/api';
+import type { TripDebugInfo } from '../services/types';
 
-interface DebugInfo {
-  trip_id: string;
-  status: string;
-  tracking_source: string;
-  accuracy: number;
-  accuracy_radius: number | null;
-  total_locations: number;
-  total_motion_events: number;
-  motion_status: string;
-  last_risk_rule: string | null;
-  last_risk_confidence: number | null;
-  guardian_phone: string;
-  last_location: any;
+function StatusBadge({ value, goodValue, label }: { value: string; goodValue: string; label: string }) {
+  return (
+    <View style={styles.badgeContainer}>
+      <View style={[
+        styles.badge,
+        { backgroundColor: value === goodValue ? colors.success : colors.amber }
+      ]}>
+        <Text style={styles.badgeText}>{value}</Text>
+      </View>
+      <Text style={styles.badgeLabel}>{label}</Text>
+    </View>
+  );
 }
 
 export default function DebugScreen() {
   const { currentTrip, isTracking, locations, motionStatus } = useTripStore();
-  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
+  const [debugInfo, setDebugInfo] = useState<TripDebugInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [healthStatus, setHealthStatus] = useState<any>(null);
+
+  const fetchHealthStatus = async () => {
+    try {
+      setHealthStatus(await getHealth());
+    } catch (error) {
+      console.error('Health check failed:', error);
+    }
+  };
+
+  const fetchDebugInfo = async () => {
+    if (!currentTrip) return;
+
+    setLoading(true);
+    try {
+      setDebugInfo(await getTripDebugInfo(currentTrip.id));
+    } catch (error) {
+      console.error('Debug info fetch failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!__DEV__) return;
@@ -55,31 +76,6 @@ export default function DebugScreen() {
     );
   }
 
-  const fetchHealthStatus = async () => {
-    try {
-      const response = await fetch(`${API_URL}/api/health`);
-      const data = await response.json();
-      setHealthStatus(data);
-    } catch (error) {
-      console.error('Health check failed:', error);
-    }
-  };
-
-  const fetchDebugInfo = async () => {
-    if (!currentTrip) return;
-
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_URL}/api/trips/${currentTrip.id}/debug`);
-      const data = await response.json();
-      setDebugInfo(data);
-    } catch (error) {
-      console.error('Debug info fetch failed:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchHealthStatus();
@@ -94,10 +90,7 @@ export default function DebugScreen() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/trips/${currentTrip.id}/test-alert`, {
-        method: 'POST',
-      });
-      const data = await response.json();
+      const data = await sendTestAlert(currentTrip.id);
       alert(`Test Alert Result:\nPush: ${data.push_sent}\nSMS: ${data.sms_sent}`);
     } catch (error) {
       console.error('Test alert failed:', error);
@@ -110,18 +103,6 @@ export default function DebugScreen() {
   const goBack = () => {
     router.back();
   };
-
-  const StatusBadge = ({ value, goodValue, label }: { value: string; goodValue: string; label: string }) => (
-    <View style={styles.badgeContainer}>
-      <View style={[
-        styles.badge,
-        { backgroundColor: value === goodValue ? colors.success : colors.amber }
-      ]}>
-        <Text style={styles.badgeText}>{value}</Text>
-      </View>
-      <Text style={styles.badgeLabel}>{label}</Text>
-    </View>
-  );
 
   return (
     <SafeAreaView style={styles.container}>

@@ -31,7 +31,7 @@ export async function sendSosSms(recipients: string[], message: string): Promise
 
   try {
     return await SosSmsModule.sendSms(recipients, message);
-  } catch (error) {
+  } catch {
     return { sent: [], failed: recipients };
   }
 }

@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { WebView } from 'react-native-webview';
 
-import { API_URL } from '../../services/api';
+import { ApiError, getSharedTrip } from '../../services/api';
+import type { SharedTripView } from '../../services/types';
 import { fonts, ThemeColors } from '../../constants/theme';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -16,14 +17,6 @@ import { useTheme } from '../../contexts/ThemeContext';
  * See backend/routers/trips.py: POST /api/trips/{id}/share (sender side,
  * in app/index.tsx) and GET /api/trips/shared/{token} (this screen).
  */
-
-interface SharedTripView {
-  status: string;
-  ended: boolean;
-  last_location: { latitude: number; longitude: number; timestamp: string } | null;
-  sharing_type: string;
-  share_expires_at: string | null;
-}
 
 const POLL_INTERVAL_MS = 15000;
 
@@ -45,7 +38,7 @@ function formatIST(iso: string): string {
 
 export default function SharedTripScreen() {
   const { token } = useLocalSearchParams<{ token: string }>();
-  const { colors, theme } = useTheme();
+  const { colors } = useTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const [view, setView] = useState<SharedTripView | null>(null);
@@ -55,15 +48,14 @@ export default function SharedTripScreen() {
   const fetchView = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await fetch(`${API_URL}/api/trips/shared/${token}`);
-      if (!res.ok) {
-        setError(res.status === 404 ? 'This share link is invalid or has expired.' : 'Could not load trip status.');
-        return;
-      }
-      setView(await res.json());
+      setView(await getSharedTrip(token));
       setError(null);
-    } catch {
-      setError('Could not reach the server. Check your connection.');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.status === 404 ? 'This share link is invalid or has expired.' : 'Could not load trip status.');
+      } else {
+        setError('Could not reach the server. Check your connection.');
+      }
     } finally {
       setLoading(false);
     }

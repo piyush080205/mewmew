@@ -170,7 +170,7 @@ export default function EditProfileScreen() {
             onChangeText={setPhone}
             keyboardType="phone-pad"
           />
-          <Text style={styles.emailText}>{user?.email} (email can't be changed here)</Text>
+          <Text style={styles.emailText}>{user?.email} (email can&apos;t be changed here)</Text>
 
           <TouchableOpacity style={styles.primaryButton} onPress={handleSaveProfile} disabled={savingProfile}>
             {savingProfile ? (
