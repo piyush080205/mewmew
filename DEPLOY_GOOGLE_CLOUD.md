@@ -1,4 +1,4 @@
-# Deploying Nirbhay Backend to Google Cloud
+# Deploying Jagriti Backend to Google Cloud
 
 This guide walks you through deploying the FastAPI backend to **Google Cloud Run** from scratch.
 No prior Google Cloud experience needed.
@@ -7,7 +7,7 @@ No prior Google Cloud experience needed.
 
 ## What You Will End Up With
 
-- A live backend URL like `https://nirbhay-backend-xxxx-el.a.run.app`
+- A live backend URL like `https://jagriti-backend-xxxx-el.a.run.app`
 - Auto-scaling (handles 0 to many users, you only pay for requests made)
 - All secrets (API keys) stored securely, never in code
 
@@ -38,7 +38,7 @@ If it prints a version number, you are good.
 1. Go to https://console.cloud.google.com
 2. Sign in with your Google account
 3. Click **Select a project** at the top → **New Project**
-4. Name it `nirbhay` and click **Create**
+4. Name it `jagriti` and click **Create**
 5. Wait ~30 seconds, then select the project from the dropdown
 
 > Google gives you $300 free credits for 90 days. Cloud Run is also free for the first 2 million requests per month.
@@ -47,7 +47,7 @@ If it prints a version number, you are good.
 
 ## Step 2: Find Your Project ID
 
-Your Project ID is shown in the Google Cloud Console under the project name. It looks like `nirbhay-123456`.
+Your Project ID is shown in the Google Cloud Console under the project name. It looks like `jagriti-123456`.
 
 Save it — you will use it in every command below. Replace `YOUR_PROJECT_ID` in all commands with it.
 
@@ -164,22 +164,22 @@ It takes about **3–5 minutes** the first time.
 
 After deployment finishes, run:
 ```bash
-gcloud run services describe nirbhay-backend --region=asia-south1 --format="value(status.url)"
+gcloud run services describe jagriti-backend --region=asia-south1 --format="value(status.url)"
 ```
 
 It will print something like:
 ```
-https://nirbhay-backend-abc123-el.a.run.app
+https://jagriti-backend-abc123-el.a.run.app
 ```
 
 Open that URL in your browser. You should see:
 ```json
-{"message": "Nirbhay Safety API - Autonomous Women Safety System"}
+{"message": "Jagriti Safety API - Autonomous Women Safety System"}
 ```
 
 To test the health endpoint:
 ```
-https://nirbhay-backend-abc123-el.a.run.app/api/health
+https://jagriti-backend-abc123-el.a.run.app/api/health
 ```
 
 ---
@@ -234,13 +234,13 @@ Then redeploy so Cloud Run picks up the new value.
 ## Viewing Logs (for debugging)
 
 ```bash
-gcloud run services logs read nirbhay-backend --region=asia-south1 --limit=50
+gcloud run services logs read jagriti-backend --region=asia-south1 --limit=50
 ```
 
 Or in the browser:
 1. Go to https://console.cloud.google.com
 2. Search **Cloud Run**
-3. Click `nirbhay-backend` → **Logs** tab
+3. Click `jagriti-backend` → **Logs** tab
 
 ---
 
@@ -248,12 +248,12 @@ Or in the browser:
 
 To stop all traffic (service still exists, no charges):
 ```bash
-gcloud run services update nirbhay-backend --region=asia-south1 --no-traffic
+gcloud run services update jagriti-backend --region=asia-south1 --no-traffic
 ```
 
 To delete completely:
 ```bash
-gcloud run services delete nirbhay-backend --region=asia-south1
+gcloud run services delete jagriti-backend --region=asia-south1
 ```
 
 ---
